@@ -62,3 +62,5 @@ require (
 	golang.org/x/tools v0.6.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace m7s.live/engine/v4 => /home/cqset/code/go/src/github.com/ysjhlnu/engine

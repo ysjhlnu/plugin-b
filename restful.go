@@ -2,7 +2,9 @@ package gb28181
 
 import (
 	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -259,4 +261,66 @@ func (c *GB28181Config) API_get_position(w http.ResponseWriter, r *http.Request)
 		}
 		return
 	}, w, r)
+}
+
+func (c *GB28181Config) API_Capture(w http.ResponseWriter, r *http.Request) {
+	var (
+		snapType int
+		interval int
+		err      error
+	)
+	id := r.URL.Query().Get("id")
+	snapTypeStr := r.URL.Query().Get("snapType")
+	if snapType, err = strconv.Atoi(snapTypeStr); err != nil {
+		snapType = 0
+	}
+	channel := r.URL.Query().Get("channelId")
+	intervalStr := r.URL.Query().Get("interval")
+
+	if interval, err = strconv.Atoi(intervalStr); err != nil {
+		interval = 60
+	}
+
+	timeRange := r.URL.Query().Get("timeRange")
+	if c := FindChannel(id, channel); c != nil {
+		w.WriteHeader(c.Capture("", timeRange, snapType, interval))
+	} else {
+		http.NotFound(w, r)
+	}
+}
+
+// API_ImgUpload 抓图上传http图片文件
+func (c *GB28181Config) API_ImgUpload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Retrieve the uploaded file
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprintf(w, "Error retrieving the file: %v", err)
+		return
+	}
+	defer file.Close()
+
+	// Create a new file in the server to store the uploaded image
+	newFile, err := os.Create(header.Filename)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "Error creating the file: %v", err)
+		return
+	}
+	defer newFile.Close()
+
+	// Copy the uploaded file to the new file on the server
+	_, err = io.Copy(newFile, file)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "Error copying the file: %v", err)
+		return
+	}
+
+	fmt.Fprintf(w, "File uploaded successfully!")
 }

@@ -129,6 +129,8 @@ type ChannelInfo struct {
 	Owner        string
 	CivilCode    string
 	Address      string
+	Longitude    string // 经度值
+	Latitude     string // 纬度值
 	Port         int
 	Parental     int
 	SafetyWay    int
@@ -341,12 +343,12 @@ func (channel *Channel) Invite(opt *InviteOptions) (code int, err error) {
 	if opt.dump == "" {
 		opt.dump = conf.DumpPath
 	}
-	protocol := ""
+	//protocol := ""
 	networkType := "udp"
 	reusePort := true
 	if conf.IsMediaNetworkTCP() {
 		networkType = "tcp"
-		protocol = "TCP/"
+		//protocol = "TCP/"
 		if conf.tcpPorts.Valid {
 			opt.MediaPort, err = conf.tcpPorts.GetPort()
 			opt.recyclePort = conf.tcpPorts.Recycle
@@ -368,15 +370,20 @@ func (channel *Channel) Invite(opt *InviteOptions) (code int, err error) {
 
 	sdpInfo := []string{
 		"v=0",
-		fmt.Sprintf("o=%s 0 0 IN IP4 %s", channel.DeviceID, d.mediaIP),
+		fmt.Sprintf("o=- 0 0 IN IP4 %s", d.mediaIP),
 		"s=" + s,
 		"u=" + channel.DeviceID + ":0",
 		"c=IN IP4 " + d.mediaIP,
 		opt.String(),
-		fmt.Sprintf("m=video %d %sRTP/AVP 96", opt.MediaPort, protocol),
-		"a=recvonly",
-		"a=rtpmap:96 PS/90000",
+		//fmt.Sprintf("m=video %d %sRTP/AVP 96", opt.MediaPort, protocol),
+		//"a=recvonly",
+		//"a=rtpmap:96 PS/90000",
+		fmt.Sprintf("m=video %d RTP/AVP 100", opt.MediaPort),
 		"y=" + opt.ssrc,
+		"a=rtpmap:100 H264/90000",
+		"a=fmtp:100 CIF=1;4CIF=1;F=1;K=1",
+		"a=rate:main",
+		"a=recvonly",
 	}
 	if conf.IsMediaNetworkTCP() {
 		sdpInfo = append(sdpInfo, "a=setup:passive", "a=connection:new")
@@ -534,4 +541,24 @@ func getSipRespErrorCode(err error) int {
 	} else {
 		return http.StatusInternalServerError
 	}
+}
+
+// Capture 图片抓拍
+func (channel *Channel) Capture(imgSrv, timeRange string, snapType, interval int) int {
+	d := channel.device
+	request := d.CreateRequest(sip.MESSAGE)
+	contentType := sip.ContentType("Application/MANSCDP+xml")
+	request.AppendHeader(&contentType)
+
+	body := fmt.Sprintf(` <?xml version="1.0" encoding="UTF-8"?>
+	<sip_xml EventType="Camera_Snap">
+    	<item Code="%s" PicServer="%s" SnapType =%d Range="%s" Interval=%d>
+  	</sip_xml>`, channel.DeviceID, imgSrv, snapType, timeRange, interval)
+
+	request.SetBody(body, true)
+	resp, err := d.SipRequestForResponse(request)
+	if err != nil {
+		return http.StatusRequestTimeout
+	}
+	return int(resp.StatusCode())
 }

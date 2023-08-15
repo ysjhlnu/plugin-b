@@ -92,8 +92,8 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 		zap.String("source", req.Source()),
 		zap.String("destination", req.Destination()))
 
-	if len(id) != 20 {
-		GB28181Plugin.Info("Wrong GB-28181", zap.String("id", id))
+	if len(id) != 18 {
+		GB28181Plugin.Info("Wrong B-Interface", zap.String("id", id))
 		return
 	}
 	passAuth := false
@@ -130,6 +130,7 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 		}
 	}
 	if passAuth {
+		// 通过校验
 		var d *Device
 		if isUnregister {
 			tmpd, ok := Devices.LoadAndDelete(id)
@@ -161,11 +162,13 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 		})
 		_ = tx.Respond(resp)
 
-		if !isUnregister {
-			//订阅设备更新
-			go d.syncChannels()
-		}
+		// TODO: B接口好像不需要主动下发而是设备主动上报
+		//if !isUnregister {
+		//	//订阅设备更新
+		//	go d.syncChannels()
+		//}
 	} else {
+		// 未通过校验
 		GB28181Plugin.Info("OnRegister unauthorized", zap.String("id", id), zap.String("source", req.Source()),
 			zap.String("destination", req.Destination()))
 		response := sip.NewResponseFromRequest("", req, http.StatusUnauthorized, "Unauthorized", "")
@@ -189,9 +192,9 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 func (d *Device) syncChannels() {
 	if time.Since(d.lastSyncTime) > 2*conf.HeartbeatInterval {
 		d.lastSyncTime = time.Now()
-		d.Catalog()
-		d.Subscribe()
-		d.QueryDeviceInfo()
+		//d.Catalog()
+		//d.Subscribe()
+		//d.QueryDeviceInfo()
 	}
 }
 
@@ -286,18 +289,42 @@ func (c *GB28181Config) OnNotify(req sip.Request, tx sip.ServerTransaction) {
 	if v, ok := Devices.Load(id); ok {
 		d := v.(*Device)
 		d.UpdateTime = time.Now()
+		//temp := &struct {
+		//	XMLName   xml.Name
+		//	CmdType   string
+		//	DeviceID  string
+		//	Time      string //位置订阅-GPS时间
+		//	Longitude string //位置订阅-经度
+		//	Latitude  string //位置订阅-维度
+		//	// Speed      string           //位置订阅-速度(km/h)(可选)
+		//	// Direction  string           //位置订阅-方向(取值为当前摄像头方向与正北方的顺时针夹角,取值范围0°~360°,单位:°)(可选)
+		//	// Altitude   string           //位置订阅-海拔高度,单位:m(可选)
+		//	DeviceList []*notifyMessage `xml:"DeviceList>Item"` //目录订阅
+		//}{}
+
 		temp := &struct {
-			XMLName   xml.Name
-			CmdType   string
-			DeviceID  string
-			Time      string //位置订阅-GPS时间
-			Longitude string //位置订阅-经度
-			Latitude  string //位置订阅-维度
-			// Speed      string           //位置订阅-速度(km/h)(可选)
-			// Direction  string           //位置订阅-方向(取值为当前摄像头方向与正北方的顺时针夹角,取值范围0°~360°,单位:°)(可选)
-			// Altitude   string           //位置订阅-海拔高度,单位:m(可选)
-			DeviceList []*notifyMessage `xml:"DeviceList>Item"` //目录订阅
+			XMLName   xml.Name `xml:"SIP_XML"`
+			Text      string   `xml:",chardata"`
+			EventType string   `xml:"EventType,attr"`
+			Code      struct {
+				Text string `xml:",chardata"` // 父节点（平台、场所、前端设备）地址编码
+			} `xml:"Code"`
+			SubList struct { // 场地、前端设备、摄像机的地址编码
+				Text   string `xml:",chardata"`
+				SubNum string `xml:"SubNum,attr"`
+				Item   []struct {
+					Text       string `xml:",chardata"`
+					Code       string `xml:"Code,attr"`       // 设备地址编码
+					Name       string `xml:"Name,attr"`       // 名 称
+					Status     string `xml:"Status,attr"`     // 节点状态值  0：不可用，1：可用
+					DecoderTag string `xml:"DecoderTag,attr"` // 解 码 插 件 标 签
+					Longitude  string `xml:"Longitude,attr"`  // 经度值
+					Latitude   string `xml:"Latitude,attr"`   // 纬度值
+					SubNum     string `xml:"SubNum,attr"`     // 包含的字节点数目
+				} `xml:"Item"`
+			} `xml:"SubList"`
 		}{}
+
 		decoder := xml.NewDecoder(bytes.NewReader([]byte(req.Body())))
 		decoder.CharsetReader = charset.NewReaderLabel
 		err := decoder.Decode(temp)
@@ -308,17 +335,49 @@ func (c *GB28181Config) OnNotify(req sip.Request, tx sip.ServerTransaction) {
 			}
 		}
 		var body string
-		switch temp.CmdType {
+		switch temp.EventType {
+
+		case "Push_Resourse": // 资源上报
+			// 资源上报属于数据接口。前端系统加电启动并初次注册成功后，应向平台上报前端系统的设备资源信息
+			GB28181Plugin.Debug("资源上报")
+			deviceList := make([]*notifyMessage, 0, len(temp.SubList.Item))
+			for _, t := range temp.SubList.Item {
+
+				d.UpdateChannelPosition(t.Code, t.Longitude, t.Latitude)
+
+				deviceList = append(deviceList, &notifyMessage{
+					DeviceID:     t.Code,
+					ParentID:     temp.Code.Text,
+					Name:         t.Name,
+					Manufacturer: "",
+					Model:        "",
+					Owner:        "",
+					CivilCode:    "",
+					Address:      "",
+					Port:         0,
+					Parental:     0,
+					SafetyWay:    0,
+					RegisterWay:  0,
+					Secrecy:      0,
+					Status:       t.Status,
+					Event:        t.Status,
+					Latitude:     t.Latitude,
+					Longitude:    t.Longitude,
+				})
+			}
+			GB28181Plugin.Sugar().Debugf("%#v", deviceList)
+			d.UpdateChannelStatus(deviceList)
+
 		case "Catalog":
 			//目录状态
-			d.UpdateChannelStatus(temp.DeviceList)
+			//d.UpdateChannelStatus(temp.DeviceList)
 		case "MobilePosition":
 			//更新channel的坐标
-			d.UpdateChannelPosition(temp.DeviceID, temp.Time, temp.Longitude, temp.Latitude)
+			//d.UpdateChannelPosition(temp.DeviceID, temp.Time, temp.Longitude, temp.Latitude)
 		// case "Alarm":
 		// 	//报警事件通知 TODO
 		default:
-			d.Warn("Not supported CmdType", zap.String("CmdType", temp.CmdType), zap.String("body", req.Body()))
+			d.Warn("Not supported CmdType", zap.String("EventType", temp.EventType), zap.String("body", req.Body()))
 			response := sip.NewResponseFromRequest("", req, http.StatusBadRequest, "", "")
 			tx.Respond(response)
 			return
@@ -345,4 +404,7 @@ type notifyMessage struct {
 	Status       string
 	//状态改变事件 ON:上线,OFF:离线,VLOST:视频丢失,DEFECT:故障,ADD:增加,DEL:删除,UPDATE:更新(必选)
 	Event string
+
+	Longitude string // 经度值
+	Latitude  string // 纬度值
 }

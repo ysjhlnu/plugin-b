@@ -443,7 +443,7 @@ func (d *Device) MobilePositionSubscribe(id string, expires time.Duration, inter
 }
 
 // UpdateChannelPosition 更新通道GPS坐标
-func (d *Device) UpdateChannelPosition(channelId string, gpsTime string, lng string, lat string) {
+func (d *Device) UpdateChannelPosition(channelId string, lng string, lat string) {
 	if v, ok := d.channelMap.Load(channelId); ok {
 		c := v.(*Channel)
 		c.GpsTime = time.Now() //时间取系统收到的时间，避免设备时间和格式问题
@@ -462,63 +462,84 @@ func (d *Device) UpdateChannelPosition(channelId string, gpsTime string, lng str
 // UpdateChannelStatus 目录订阅消息处理：新增/移除/更新通道或者更改通道状态
 func (d *Device) UpdateChannelStatus(deviceList []*notifyMessage) {
 	for _, v := range deviceList {
-		switch v.Event {
-		case "ON":
-			d.Debug("receive channel online notify")
-			d.channelOnline(v.DeviceID)
-		case "OFF":
-			d.Debug("receive channel offline notify")
-			d.channelOffline(v.DeviceID)
-		case "VLOST":
-			d.Debug("receive channel video lost notify")
-			d.channelOffline(v.DeviceID)
-		case "DEFECT":
-			d.Debug("receive channel video defect notify")
-			d.channelOffline(v.DeviceID)
-		case "ADD":
-			d.Debug("receive channel add notify")
-			channel := ChannelInfo{
-				DeviceID:     v.DeviceID,
-				ParentID:     v.ParentID,
-				Name:         v.Name,
-				Manufacturer: v.Manufacturer,
-				Model:        v.Model,
-				Owner:        v.Owner,
-				CivilCode:    v.CivilCode,
-				Address:      v.Address,
-				Port:         v.Port,
-				Parental:     v.Parental,
-				SafetyWay:    v.SafetyWay,
-				RegisterWay:  v.RegisterWay,
-				Secrecy:      v.Secrecy,
-				Status:       ChannelStatus(v.Status),
-			}
-			d.addOrUpdateChannel(channel)
-		case "DEL":
-			//删除
-			d.Debug("receive channel delete notify")
-			d.deleteChannel(v.DeviceID)
-		case "UPDATE":
-			d.Debug("receive channel update notify")
-			// 更新通道
-			channel := ChannelInfo{
-				DeviceID:     v.DeviceID,
-				ParentID:     v.ParentID,
-				Name:         v.Name,
-				Manufacturer: v.Manufacturer,
-				Model:        v.Model,
-				Owner:        v.Owner,
-				CivilCode:    v.CivilCode,
-				Address:      v.Address,
-				Port:         v.Port,
-				Parental:     v.Parental,
-				SafetyWay:    v.SafetyWay,
-				RegisterWay:  v.RegisterWay,
-				Secrecy:      v.Secrecy,
-				Status:       ChannelStatus(v.Status),
-			}
-			d.UpdateChannels(channel)
+
+		d.Debug("receive channel add notify")
+		channel := ChannelInfo{
+			DeviceID:     v.DeviceID,
+			ParentID:     v.ParentID,
+			Name:         v.Name,
+			Manufacturer: v.Manufacturer,
+			Model:        v.Model,
+			Owner:        v.Owner,
+			CivilCode:    v.CivilCode,
+			Address:      v.Address,
+			Port:         v.Port,
+			Parental:     v.Parental,
+			SafetyWay:    v.SafetyWay,
+			RegisterWay:  v.RegisterWay,
+			Secrecy:      v.Secrecy,
+			Status:       ChannelStatus(v.Status),
+			Longitude:    v.Longitude,
+			Latitude:     v.Latitude,
 		}
+		d.addOrUpdateChannel(channel)
+
+		//switch v.Event {
+		//case "ON":
+		//	d.Debug("receive channel online notify")
+		//	d.channelOnline(v.DeviceID)
+		//case "OFF":
+		//	d.Debug("receive channel offline notify")
+		//	d.channelOffline(v.DeviceID)
+		//case "VLOST":
+		//	d.Debug("receive channel video lost notify")
+		//	d.channelOffline(v.DeviceID)
+		//case "DEFECT":
+		//	d.Debug("receive channel video defect notify")
+		//	d.channelOffline(v.DeviceID)
+		//case "1": // 可用
+		//	d.Debug("receive channel add notify")
+		//	channel := ChannelInfo{
+		//		DeviceID:     v.DeviceID,
+		//		ParentID:     v.ParentID,
+		//		Name:         v.Name,
+		//		Manufacturer: v.Manufacturer,
+		//		Model:        v.Model,
+		//		Owner:        v.Owner,
+		//		CivilCode:    v.CivilCode,
+		//		Address:      v.Address,
+		//		Port:         v.Port,
+		//		Parental:     v.Parental,
+		//		SafetyWay:    v.SafetyWay,
+		//		RegisterWay:  v.RegisterWay,
+		//		Secrecy:      v.Secrecy,
+		//		Status:       ChannelStatus(v.Status),
+		//	}
+		//	d.addOrUpdateChannel(channel)
+		//case "0": // 不可用
+		//	d.Debug("receive channel delete notify")
+		//	d.deleteChannel(v.DeviceID)
+		//case "UPDATE":
+		//	d.Debug("receive channel update notify")
+		//	// 更新通道
+		//	channel := ChannelInfo{
+		//		DeviceID:     v.DeviceID,
+		//		ParentID:     v.ParentID,
+		//		Name:         v.Name,
+		//		Manufacturer: v.Manufacturer,
+		//		Model:        v.Model,
+		//		Owner:        v.Owner,
+		//		CivilCode:    v.CivilCode,
+		//		Address:      v.Address,
+		//		Port:         v.Port,
+		//		Parental:     v.Parental,
+		//		SafetyWay:    v.SafetyWay,
+		//		RegisterWay:  v.RegisterWay,
+		//		Secrecy:      v.Secrecy,
+		//		Status:       ChannelStatus(v.Status),
+		//	}
+		//	d.UpdateChannels(channel)
+		//}
 	}
 }
 
