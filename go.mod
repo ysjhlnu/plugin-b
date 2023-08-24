@@ -63,4 +63,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace m7s.live/engine/v4 => /home/cqset/code/go/src/github.com/ysjhlnu/engine
+replace m7s.live/engine/v4 => ../engine

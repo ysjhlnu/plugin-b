@@ -93,7 +93,7 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 		zap.String("destination", req.Destination()))
 
 	if len(id) != 18 {
-		GB28181Plugin.Info("Wrong B-Interface", zap.String("id", id))
+		GB28181Plugin.Info("Wrong B-Interface 编码长度错误", zap.String("id", id))
 		return
 	}
 	passAuth := false
@@ -131,6 +131,7 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 	}
 	if passAuth {
 		// 通过校验
+		GB28181Plugin.Info("密码校验通过")
 		var d *Device
 		if isUnregister {
 			tmpd, ok := Devices.LoadAndDelete(id)
@@ -148,8 +149,13 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 				d = c.StoreDevice(id, req)
 			}
 		}
+
+		// 删除nonce,在刷新注册的时候会提示401然后返回nonce再注册成功
+		GB28181Plugin.Sugar().Infof("%s--删除nonce", id)
+		GB28181Plugin.Sugar().Infof("%s--删除注册次数", id)
 		DeviceNonce.Delete(id)
 		DeviceRegisterCount.Delete(id)
+
 		resp := sip.NewResponseFromRequest("", req, http.StatusOK, "OK", "")
 		to, _ := resp.To()
 		resp.ReplaceHeaders("To", []sip.Header{&sip.ToHeader{Address: to.Address, Params: sip.NewParams().Add("tag", sip.String{Str: utils.RandNumString(9)})}})
@@ -162,13 +168,18 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 		})
 		_ = tx.Respond(resp)
 
-		// TODO: B接口好像不需要主动下发而是设备主动上报
-		//if !isUnregister {
-		//	//订阅设备更新
-		//	go d.syncChannels()
-		//}
+		GB28181Plugin.Debug("获取设备信息")
+		if !isUnregister {
+			go d.QueryDeviceInfo()
+			go d.DeviceWorkInfo(0xFFFFFFFF)
+
+			go d.GetFrontAbility() // 获取前端支持能力集
+
+			go d.syncChannels()
+		}
 	} else {
 		// 未通过校验
+		GB28181Plugin.Info("密码未通过校验")
 		GB28181Plugin.Info("OnRegister unauthorized", zap.String("id", id), zap.String("source", req.Source()),
 			zap.String("destination", req.Destination()))
 		response := sip.NewResponseFromRequest("", req, http.StatusUnauthorized, "Unauthorized", "")
@@ -212,30 +223,39 @@ func (c *GB28181Config) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 			d.Status = DeviceOnlineStatus
 		}
 		d.UpdateTime = time.Now()
-		temp := &struct {
-			XMLName      xml.Name
-			CmdType      string
-			SN           int // 请求序列号，一般用于对应 request 和 response
-			DeviceID     string
-			DeviceName   string
-			Manufacturer string
-			Model        string
-			Channel      string
-			DeviceList   []ChannelInfo `xml:"DeviceList>Item"`
-			RecordList   []*Record     `xml:"RecordList>Item"`
-			SumNum       int           // 录像结果的总数 SumNum，录像结果会按照多条消息返回，可用于判断是否全部返回
+
+		gen := &struct {
+			XMLName   xml.Name `xml:"SIP_XML"`
+			Text      string   `xml:",chardata"`
+			EventType string   `xml:"EventType,attr"`
 		}{}
+
+		//temp := &struct {
+		//	XMLName      xml.Name
+		//	CmdType      string
+		//	SN           int // 请求序列号，一般用于对应 request 和 response
+		//	DeviceID     string
+		//	DeviceName   string
+		//	Manufacturer string
+		//	Model        string
+		//	Channel      string
+		//	DeviceList   []ChannelInfo `xml:"DeviceList>Item"`
+		//	RecordList   []*Record     `xml:"RecordList>Item"`
+		//	SumNum       int           // 录像结果的总数 SumNum，录像结果会按照多条消息返回，可用于判断是否全部返回
+		//}{}
+
 		decoder := xml.NewDecoder(bytes.NewReader([]byte(req.Body())))
 		decoder.CharsetReader = charset.NewReaderLabel
-		err := decoder.Decode(temp)
+		err := decoder.Decode(gen)
 		if err != nil {
-			err = utils.DecodeGbk(temp, []byte(req.Body()))
+			err = utils.DecodeGbk(gen, []byte(req.Body()))
 			if err != nil {
 				GB28181Plugin.Error("decode catelog err", zap.Error(err))
 			}
 		}
+
 		var body string
-		switch temp.CmdType {
+		switch gen.EventType {
 		case "Keepalive":
 			d.LastKeepaliveAt = time.Now()
 			//callID !="" 说明是订阅的事件类型信息
@@ -255,19 +275,134 @@ func (c *GB28181Config) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 				GB28181Plugin.Debug("Mobile Position Subscribe", zap.String("deviceID", d.ID))
 			}
 		case "Catalog":
-			d.UpdateChannels(temp.DeviceList...)
+			//d.UpdateChannels(temp.DeviceList...)
 		case "RecordInfo":
-			RecordQueryLink.Put(d.ID, temp.DeviceID, temp.SN, temp.SumNum, temp.RecordList)
-		case "DeviceInfo":
-			// 主设备信息
-			d.Name = temp.DeviceName
-			d.Manufacturer = temp.Manufacturer
-			d.Model = temp.Model
+			//RecordQueryLink.Put(d.ID, temp.DeviceID, temp.SN, temp.SumNum, temp.RecordList)
 		case "Alarm":
 			d.Status = DeviceAlarmedStatus
 			body = BuildAlarmResponseXML(d.ID)
+		case "Station_Response_GetSystemInfo":
+			d.Debug("设备基本信息")
+
+			devInfo := &struct {
+				XMLName   xml.Name `xml:"SIP_XML"`
+				Text      string   `xml:",chardata"`
+				EventType string   `xml:"EventType,attr"`
+				Item      struct {
+					Text    string `xml:",chardata"`
+					Code    string `xml:"Code,attr"`
+					Valid   string `xml:"Valid,attr"`
+					Version struct {
+						Text     string `xml:",chardata"`
+						Software string `xml:"Software,attr"`
+						Hardware string `xml:"Hardware,attr"`
+					} `xml:"Version"`
+					Device struct {
+						Text         string `xml:",chardata"`
+						Manufacturer string `xml:"Manufacturer,attr"`
+						Model        string `xml:"Model,attr"`
+						CameraNum    string `xml:"CameraNum,attr"`
+					} `xml:"Device"`
+				} `xml:"Item"`
+			}{}
+
+			decoder := xml.NewDecoder(bytes.NewReader([]byte(req.Body())))
+			decoder.CharsetReader = charset.NewReaderLabel
+			err := decoder.Decode(devInfo)
+			if err != nil {
+				err = utils.DecodeGbk(devInfo, []byte(req.Body()))
+				if err != nil {
+					GB28181Plugin.Error("decode Station_Response_GetSystemInfo err", zap.Error(err))
+				}
+			}
+
+			GB28181Plugin.Sugar().Debugf("%#v", devInfo)
+
+			// 主设备信息
+			d.Name = devInfo.Item.Code
+			d.Code = devInfo.Item.Code
+			d.Manufacturer = devInfo.Item.Device.Manufacturer
+			d.Model = devInfo.Item.Device.Model
+			d.Software = devInfo.Item.Version.Software
+			d.Hardware = devInfo.Item.Version.Hardware
+			d.CameraNum = devInfo.Item.Device.CameraNum
+
+		case "Station_Request_SetVideoParm":
+			d.Debug("设备工作状态获取")
+
+			workState := &struct {
+				XMLName   xml.Name `xml:"SIP_XML"`
+				Text      string   `xml:",chardata"`
+				EventType string   `xml:"EventType,attr"`
+				SubList   struct {
+					Text   string `xml:",chardata"`
+					Code   string `xml:"Code,attr"`
+					SubNum string `xml:"SubNum,attr"`
+					Item   []struct {
+						Text         string `xml:",chardata"`
+						Code         string `xml:"Code,attr"`
+						InfoType     string `xml:"InfoType,attr"`
+						DeviceStatus string `xml:"DeviceStatus,attr"`
+						DiskStatus   string `xml:"DiskStatus,attr"`
+						ChannelsNum  string `xml:"ChannelsNum,attr"`
+						VideoChannel []struct {
+							Text               string `xml:",chardata"`
+							Code               string `xml:"Code,attr"`
+							InfoType           string `xml:"InfoType,attr"`
+							ChannelRecord      string `xml:"ChannelRecord,attr"`
+							Status             string `xml:"Status,attr"`
+							ChannelVideoStatus string `xml:"ChannelVideoStatus,attr"`
+							ChannelClientNum   string `xml:"ChannelClientNum,attr"`
+						} `xml:"VideoChannel"`
+					} `xml:"Item"`
+				} `xml:"SubList"`
+			}{}
+
+			decoder := xml.NewDecoder(bytes.NewReader([]byte(req.Body())))
+			decoder.CharsetReader = charset.NewReaderLabel
+			err := decoder.Decode(workState)
+			if err != nil {
+				err = utils.DecodeGbk(workState, []byte(req.Body()))
+				if err != nil {
+					GB28181Plugin.Error("decode Station_Response_GetSystemInfo err", zap.Error(err))
+				}
+			}
+
+			GB28181Plugin.Sugar().Debugf("%#v", workState)
+
+		case "Station_Response_GetCapability":
+			d.Debug("响应获取前端能力集")
+
+			ability := &struct {
+				XMLName   xml.Name `xml:"SIP_XML"`
+				Text      string   `xml:",chardata"`
+				EventType string   `xml:"EventType,attr"`
+				Public    struct {
+					Text  string `xml:",chardata"`
+					Code  string `xml:"Code,attr"`
+					Valid string `xml:"Valid,attr"`
+					Item  []struct {
+						Text  string `xml:",chardata"`
+						Name  string `xml:"Name,attr"`
+						Value string `xml:"Value,attr"`
+					} `xml:"Item"`
+				} `xml:"Public"`
+			}{}
+
+			decoder := xml.NewDecoder(bytes.NewReader([]byte(req.Body())))
+			decoder.CharsetReader = charset.NewReaderLabel
+			err := decoder.Decode(ability)
+			if err != nil {
+				err = utils.DecodeGbk(ability, []byte(req.Body()))
+				if err != nil {
+					GB28181Plugin.Error("decode Station_Response_GetSystemInfo err", zap.Error(err))
+				}
+			}
+
+			GB28181Plugin.Sugar().Debugf("%#v", ability)
+
 		default:
-			d.Warn("Not supported CmdType", zap.String("CmdType", temp.CmdType), zap.String("body", req.Body()))
+			d.Warn("Not supported EventType", zap.String("EventType", gen.EventType), zap.String("body", req.Body()))
 			response := sip.NewResponseFromRequest("", req, http.StatusBadRequest, "", "")
 			tx.Respond(response)
 			return
@@ -289,18 +424,24 @@ func (c *GB28181Config) OnNotify(req sip.Request, tx sip.ServerTransaction) {
 	if v, ok := Devices.Load(id); ok {
 		d := v.(*Device)
 		d.UpdateTime = time.Now()
-		//temp := &struct {
-		//	XMLName   xml.Name
-		//	CmdType   string
-		//	DeviceID  string
-		//	Time      string //位置订阅-GPS时间
-		//	Longitude string //位置订阅-经度
-		//	Latitude  string //位置订阅-维度
-		//	// Speed      string           //位置订阅-速度(km/h)(可选)
-		//	// Direction  string           //位置订阅-方向(取值为当前摄像头方向与正北方的顺时针夹角,取值范围0°~360°,单位:°)(可选)
-		//	// Altitude   string           //位置订阅-海拔高度,单位:m(可选)
-		//	DeviceList []*notifyMessage `xml:"DeviceList>Item"` //目录订阅
-		//}{}
+
+		g := &struct {
+			XMLName   xml.Name `xml:"SIP_XML"`
+			Text      string   `xml:",chardata"`
+			EventType string   `xml:"EventType,attr"`
+		}{}
+
+		decoder := xml.NewDecoder(bytes.NewReader([]byte(req.Body())))
+		decoder.CharsetReader = charset.NewReaderLabel
+		err := decoder.Decode(g)
+		if err != nil {
+			err = utils.DecodeGbk(g, []byte(req.Body()))
+			if err != nil {
+				GB28181Plugin.Error("decode catelog err", zap.Error(err))
+			}
+		}
+
+		GB28181Plugin.Sugar().Debugf("通用解析： %#v", g)
 
 		temp := &struct {
 			XMLName   xml.Name `xml:"SIP_XML"`
@@ -325,15 +466,16 @@ func (c *GB28181Config) OnNotify(req sip.Request, tx sip.ServerTransaction) {
 			} `xml:"SubList"`
 		}{}
 
-		decoder := xml.NewDecoder(bytes.NewReader([]byte(req.Body())))
+		decoder = xml.NewDecoder(bytes.NewReader([]byte(req.Body())))
 		decoder.CharsetReader = charset.NewReaderLabel
-		err := decoder.Decode(temp)
+		err = decoder.Decode(temp)
 		if err != nil {
 			err = utils.DecodeGbk(temp, []byte(req.Body()))
 			if err != nil {
 				GB28181Plugin.Error("decode catelog err", zap.Error(err))
 			}
 		}
+
 		var body string
 		switch temp.EventType {
 
@@ -367,6 +509,32 @@ func (c *GB28181Config) OnNotify(req sip.Request, tx sip.ServerTransaction) {
 			}
 			GB28181Plugin.Sugar().Debugf("%#v", deviceList)
 			d.UpdateChannelStatus(deviceList)
+		case "Snapshot_Notify": // 图像数据上报通知
+
+			sn := struct {
+				XMLName   xml.Name `xml:"SIP_XML"`
+				Text      string   `xml:",chardata"`
+				EventType string   `xml:"EventType,attr"`
+				Item      []struct {
+					Text     string `xml:",chardata"`
+					Code     string `xml:"Code,attr"`
+					Type     string `xml:"Type,attr"`
+					Time     string `xml:"Time,attr"`
+					FileUrl  string `xml:"FileUrl,attr"`
+					FileSize string `xml:"FileSize,attr"`
+					Verfiy   string `xml:"Verfiy,attr"`
+				} `xml:"Item"`
+			}{}
+
+			decoder = xml.NewDecoder(bytes.NewReader([]byte(req.Body())))
+			decoder.CharsetReader = charset.NewReaderLabel
+			err = decoder.Decode(sn)
+			if err != nil {
+				err = utils.DecodeGbk(sn, []byte(req.Body()))
+				if err != nil {
+					GB28181Plugin.Error("decode catelog err", zap.Error(err))
+				}
+			}
 
 		case "Catalog":
 			//目录状态

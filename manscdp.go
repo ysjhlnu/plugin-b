@@ -27,13 +27,22 @@ var (
 </Query>
 `
 	// DeviceInfoXML 查询设备详情xml样式
-	DeviceInfoXML = `<?xml version="1.0"?>
-<Query>
-<CmdType>DeviceInfo</CmdType>
-<SN>%d</SN>
-<DeviceID>%s</DeviceID>
-</Query>
-`
+	DeviceInfoXML = `<?xml version="1.0" encoding="UTF-8"?>
+<SIP_XML EventType="Station_Request_GetSystemInfo">
+<Item Code="%s"/>
+</SIP_XML>`
+
+	FrontedCapability = `<?xml version="1.0" encoding="UTF-8"?>
+<SIP_XML EventType="Station_Request_GetCapability">
+    <Item Code="%s"/>
+</SIP_XML>`
+
+	// DeviceWorkInfoXML 设备工作状态xml
+	DeviceWorkInfoXML = `<?xml version="1.0" encoding=”UTF-8”?>
+<SIP_XML EventType=Station_Request_GetVideoParm>
+    <Item Code="%s" InfoType="%d" />
+</SIP_XML>`
+
 	// DevicePositionXML 订阅设备位置
 	DevicePositionXML = `<?xml version="1.0"?>
 <Query>
@@ -56,8 +65,18 @@ func intTotime(t int64) time.Time {
 }
 
 // BuildDeviceInfoXML 获取设备详情指令
-func BuildDeviceInfoXML(sn int, id string) string {
-	return fmt.Sprintf(DeviceInfoXML, sn, id)
+func BuildDeviceInfoXML(id string) string {
+	return fmt.Sprintf(DeviceInfoXML, id)
+}
+
+// BuildTheFrontedCapability 请求获取前端支持的能力集
+func BuildTheFrontedCapability(id string) string {
+	return fmt.Sprintf(FrontedCapability, id)
+}
+
+// BuildDeviceWorkInfoXML 获取设备工作状态详情指令
+func BuildDeviceWorkInfoXML(id string, infoType uint32) string {
+	return fmt.Sprintf(DeviceWorkInfoXML, id, infoType)
 }
 
 // BuildCatalogXML 获取NVR下设备列表指令

@@ -58,8 +58,10 @@ func (c *GB28181Config) API_control(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	channel := r.URL.Query().Get("channel")
 	ptzcmd := r.URL.Query().Get("ptzcmd")
+	l := r.URL.Query().Get("l") // 横向运动速度
+	p := r.URL.Query().Get("p") // 纵向运动速度
 	if c := FindChannel(id, channel); c != nil {
-		util.ReturnError(0, fmt.Sprintf("control code:%d", c.Control(ptzcmd)), w, r)
+		util.ReturnError(0, fmt.Sprintf("control code:%d", c.Control(ptzcmd, l, p)), w, r)
 	} else {
 		util.ReturnError(util.APIErrorNotFound, fmt.Sprintf("device %q channel %q not found", id, channel), w, r)
 	}
@@ -72,31 +74,31 @@ func (c *GB28181Config) API_ptz(w http.ResponseWriter, r *http.Request) {
 	cmd := q.Get("cmd")   // 命令名称，见 ptz.go name2code 定义
 	hs := q.Get("hSpeed") // 水平速度
 	vs := q.Get("vSpeed") // 垂直速度
-	zs := q.Get("zSpeed") // 缩放速度
+	//zs := q.Get("zSpeed") // 缩放速度
 
-	hsN, err := strconv.ParseUint(hs, 10, 8)
-	if err != nil {
-		util.ReturnError(util.APIErrorQueryParse, "hSpeed parameter is invalid", w, r)
-		return
-	}
-	vsN, err := strconv.ParseUint(vs, 10, 8)
-	if err != nil {
-		util.ReturnError(util.APIErrorQueryParse, "vSpeed parameter is invalid", w, r)
-		return
-	}
-	zsN, err := strconv.ParseUint(zs, 10, 8)
-	if err != nil {
-		util.ReturnError(util.APIErrorQueryParse, "zSpeed parameter is invalid", w, r)
-		return
-	}
+	//hsN, err := strconv.ParseUint(hs, 10, 8)
+	//if err != nil {
+	//	util.ReturnError(util.APIErrorQueryParse, "hSpeed parameter is invalid", w, r)
+	//	return
+	//}
+	//vsN, err := strconv.ParseUint(vs, 10, 8)
+	//if err != nil {
+	//	util.ReturnError(util.APIErrorQueryParse, "vSpeed parameter is invalid", w, r)
+	//	return
+	//}
+	//zsN, err := strconv.ParseUint(zs, 10, 8)
+	//if err != nil {
+	//	util.ReturnError(util.APIErrorQueryParse, "zSpeed parameter is invalid", w, r)
+	//	return
+	//}
 
-	ptzcmd, err := toPtzStrByCmdName(cmd, uint8(hsN), uint8(vsN), uint8(zsN))
-	if err != nil {
-		util.ReturnError(util.APIErrorQueryParse, err.Error(), w, r)
-		return
-	}
+	//ptzcmd, err := toPtzStrByCmdName(cmd, uint8(hsN), uint8(vsN), uint8(zsN))
+	//if err != nil {
+	//	util.ReturnError(util.APIErrorQueryParse, err.Error(), w, r)
+	//	return
+	//}
 	if c := FindChannel(id, channel); c != nil {
-		code := c.Control(ptzcmd)
+		code := c.Control(cmd, hs, vs)
 		util.ReturnError(code, "device received", w, r)
 	} else {
 		util.ReturnError(util.APIErrorNotFound, fmt.Sprintf("device %q channel %q not found", id, channel), w, r)
@@ -123,16 +125,20 @@ func (c *GB28181Config) API_invite(w http.ResponseWriter, r *http.Request) {
 	}
 	opt.Validate(startTime, endTime)
 	if c := FindChannel(id, channel); c == nil {
+		GB28181Plugin.Error(fmt.Sprintf("device %q channel %q not found", id, channel))
 		util.ReturnError(util.APIErrorNotFound, fmt.Sprintf("device %q channel %q not found", id, channel), w, r)
 	} else if opt.IsLive() && c.status.Load() > 0 {
+		GB28181Plugin.Warn("live stream already exists")
 		util.ReturnError(util.APIErrorQueryParse, "live stream already exists", w, r)
 	} else if code, err := c.Invite(&opt); err == nil {
 		if code == 200 {
 			util.ReturnOK(w, r)
 		} else {
+			GB28181Plugin.Error(fmt.Sprintf("invite return code %d", code))
 			util.ReturnError(util.APIErrorInternal, fmt.Sprintf("invite return code %d", code), w, r)
 		}
 	} else {
+		GB28181Plugin.Error(err.Error())
 		util.ReturnError(util.APIErrorInternal, err.Error(), w, r)
 	}
 }
@@ -263,27 +269,16 @@ func (c *GB28181Config) API_get_position(w http.ResponseWriter, r *http.Request)
 	}, w, r)
 }
 
-func (c *GB28181Config) API_Capture(w http.ResponseWriter, r *http.Request) {
-	var (
-		snapType int
-		interval int
-		err      error
-	)
-	id := r.URL.Query().Get("id")
-	snapTypeStr := r.URL.Query().Get("snapType")
-	if snapType, err = strconv.Atoi(snapTypeStr); err != nil {
-		snapType = 0
-	}
-	channel := r.URL.Query().Get("channelId")
-	intervalStr := r.URL.Query().Get("interval")
+func (c *GB28181Config) API_capture(w http.ResponseWriter, r *http.Request) {
 
-	if interval, err = strconv.Atoi(intervalStr); err != nil {
-		interval = 60
-	}
+	id := r.URL.Query().Get("id")
+	snapType := r.URL.Query().Get("snapType")
+	channel := r.URL.Query().Get("channel")
+	interval := r.URL.Query().Get("interval")
 
 	timeRange := r.URL.Query().Get("timeRange")
 	if c := FindChannel(id, channel); c != nil {
-		w.WriteHeader(c.Capture("", timeRange, snapType, interval))
+		w.WriteHeader(c.Capture("http://192.168.1.166:8080/gb28181/api/imgUpload", timeRange, snapType, interval))
 	} else {
 		http.NotFound(w, r)
 	}
@@ -323,4 +318,9 @@ func (c *GB28181Config) API_ImgUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Fprintf(w, "File uploaded successfully!")
+}
+
+// API_device_info 设备基本信息获取
+func (c *GB28181Config) API_device_info(w http.ResponseWriter, r *http.Request) {
+
 }

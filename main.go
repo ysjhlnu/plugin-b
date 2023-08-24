@@ -23,11 +23,11 @@ type GB28181Config struct {
 	InviteIDs  string //按照国标gb28181协议允许邀请的设备类型:132 摄像机 NVR
 	ListenAddr string `default:"0.0.0.0"`
 	//sip服务器的配置
-	SipNetwork string   `default:"udp"` //传输协议，默认UDP，可选TCP
+	SipNetwork string   `default:"tcp"` //传输协议，默认UDP，可选TCP
 	SipIP      string   //sip 服务器公网IP
-	SipPort    uint16   `default:"5060"`                 //sip 服务器端口，默认 5060
-	Serial     string   `default:"34020000002000000001"` //sip 服务器 id, 默认 34020000002000000001
-	Realm      string   `default:"3402000000"`           //sip 服务器域，默认 3402000000
+	SipPort    uint16   `default:"5060"`               //sip 服务器端口，默认 5060
+	Serial     string   `default:"340200000020000001"` //sip 服务器 id, 默认 34020000002000000001
+	Realm      string   `default:"34020000"`           //sip 服务器域，默认 3402000000
 	Username   string   //sip 服务器账号
 	Password   string   //sip 服务器密码
 	Port       struct { // 新配置方式
@@ -62,6 +62,7 @@ type GB28181Config struct {
 
 }
 
+// initRoutes 初始化路线
 func (c *GB28181Config) initRoutes() {
 	c.routes = make(map[string]string)
 	tempIps := myip.LocalAndInternalIPs()
@@ -89,7 +90,7 @@ func (c *GB28181Config) OnEvent(event any) {
 				c.MediaPortMin = ports[0]
 				c.MediaPortMax = ports[1]
 			} else {
-				c.MediaPortMin = 0 
+				c.MediaPortMin = 0
 				c.MediaPortMax = 0
 				c.MediaPort = ports[0]
 			}

@@ -57,15 +57,19 @@ const (
 type Device struct {
 	//*transaction.Core `json:"-" yaml:"-"`
 	ID              string
-	Name            string
-	Manufacturer    string
-	Model           string
+	Code            string // 前端系统地址编码
+	Name            string // 设备名称
+	Manufacturer    string // 厂商信息
+	Model           string // 设备型号
+	Software        string // 软件版本
+	Hardware        string // 硬件版本
+	CameraNum       string // 摄像机数量
+	sn              int
 	Owner           string
 	RegisterTime    time.Time
 	UpdateTime      time.Time
 	LastKeepaliveAt time.Time
 	Status          DeviceStatus
-	sn              int
 	addr            sip.Address
 	sipIP           string //设备对应网卡的服务器ip
 	mediaIP         string //设备对应网卡的服务器ip
@@ -227,6 +231,16 @@ func (d *Device) addOrUpdateChannel(info ChannelInfo) (c *Channel) {
 		}
 		d.channelMap.Store(info.DeviceID, c)
 	}
+
+	switch info.Status {
+	case ChannelOnStatus:
+		d.Debug("receive channel online notify")
+		d.channelOnline(info.DeviceID)
+	case ChannelOffStatus:
+		d.Debug("receive channel offline notify")
+		d.channelOffline(info.DeviceID)
+	}
+
 	return
 }
 
@@ -392,8 +406,8 @@ func (d *Device) QueryDeviceInfo() {
 		request := d.CreateRequest(sip.MESSAGE)
 		contentType := sip.ContentType("Application/MANSCDP+xml")
 		request.AppendHeader(&contentType)
-		request.SetBody(BuildDeviceInfoXML(d.sn, d.ID), true)
-
+		request.SetBody(BuildDeviceInfoXML(d.ID), true)
+		GB28181Plugin.Sugar().Debugf("设备基本信息获取")
 		response, _ := d.SipRequestForResponse(request)
 		if response != nil {
 			// via, _ := response.ViaHop()
@@ -406,6 +420,49 @@ func (d *Device) QueryDeviceInfo() {
 			if response.StatusCode() == http.StatusOK {
 				break
 			}
+		}
+	}
+}
+
+// DeviceWorkInfo 设备工作状态获取
+func (d *Device) DeviceWorkInfo(infoType uint32) {
+	request := d.CreateRequest(sip.MESSAGE)
+	contentType := sip.ContentType("Application/MANSCDP+xml")
+	request.AppendHeader(&contentType)
+	request.SetBody(BuildDeviceWorkInfoXML(d.ID, infoType), true)
+	GB28181Plugin.Sugar().Debugf("设备工作状态获取")
+	response, _ := d.SipRequestForResponse(request)
+	if response != nil {
+		// via, _ := response.ViaHop()
+
+		// if via != nil && via.Params.Has("received") {
+		// 	received, _ := via.Params.Get("received")
+		// 	d.SipIP = received.String()
+		// }
+		d.Info("QueryDeviceInfo", zap.Uint16("status code", uint16(response.StatusCode())))
+		if response.StatusCode() == http.StatusOK {
+			return
+		}
+	}
+}
+
+func (d *Device) GetFrontAbility() {
+	request := d.CreateRequest(sip.MESSAGE)
+	contentType := sip.ContentType("Application/MANSCDP+xml")
+	request.AppendHeader(&contentType)
+	request.SetBody(BuildTheFrontedCapability(d.ID), true)
+	GB28181Plugin.Sugar().Debugf("请求获取前端支持的能力集")
+	response, _ := d.SipRequestForResponse(request)
+	if response != nil {
+		// via, _ := response.ViaHop()
+
+		// if via != nil && via.Params.Has("received") {
+		// 	received, _ := via.Params.Get("received")
+		// 	d.SipIP = received.String()
+		// }
+		d.Info("Station_Request_GetCapability", zap.Uint16("status code", uint16(response.StatusCode())))
+		if response.StatusCode() == http.StatusOK {
+			return
 		}
 	}
 }

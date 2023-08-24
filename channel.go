@@ -1,6 +1,7 @@
 package gb28181
 
 import (
+	"encoding/xml"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -240,19 +241,59 @@ func (channel *Channel) QueryRecord(startTime, endTime string) ([]*Record, error
 	return r.list, r.err
 }
 
-func (channel *Channel) Control(PTZCmd string) int {
+func (channel *Channel) Control(PTZCmd, landscape, portrait string) int {
 	d := channel.device
 	request := d.CreateRequest(sip.MESSAGE)
 	contentType := sip.ContentType("Application/MANSCDP+xml")
 	request.AppendHeader(&contentType)
-	body := fmt.Sprintf(`<?xml version="1.0"?>
-		<Control>
-		<CmdType>DeviceControl</CmdType>
-		<SN>%d</SN>
-		<DeviceID>%s</DeviceID>
-		<PTZCmd>%s</PTZCmd>
-		</Control>`, d.sn, channel.DeviceID, PTZCmd)
-	request.SetBody(body, true)
+
+	type SIPXML struct {
+		XMLName   xml.Name `xml:"SIP_XML"`
+		Text      string   `xml:",chardata"`
+		EventType string   `xml:"EventType,attr"`
+		Item      struct {
+			Text         string `xml:",chardata"`
+			Code         string `xml:"Code,attr"`
+			Command      string `xml:"Command,attr"`
+			CommandPara1 string `xml:"CommandPara1,attr"`
+			CommandPara2 string `xml:"CommandPara2,attr"`
+			CommandPara3 string `xml:"CommandPara3,attr"`
+		} `xml:"Item"`
+	}
+
+	s := SIPXML{
+		XMLName:   xml.Name{},
+		Text:      "",
+		EventType: "Control_Camera",
+		Item: struct {
+			Text         string `xml:",chardata"`
+			Code         string `xml:"Code,attr"`
+			Command      string `xml:"Command,attr"`
+			CommandPara1 string `xml:"CommandPara1,attr"`
+			CommandPara2 string `xml:"CommandPara2,attr"`
+			CommandPara3 string `xml:"CommandPara3,attr"`
+		}{Code: channel.DeviceID, Command: PTZCmd, CommandPara1: landscape, CommandPara2: portrait},
+	}
+
+	raw, err := xml.Marshal(s)
+	if err != nil {
+		fmt.Println(err)
+		return -1
+	}
+
+	header := []byte(`<?xml version="1.0" encoding="UTF-8"?>`)
+
+	dest := make([]byte, len(header)+len(raw))
+	copy(dest, header)
+	copy(dest[len(header):], raw)
+	fmt.Println(string(dest))
+
+	//body := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+	//	<sip_xml EventType="Control_Camera">
+	//	<item Code="%s"  Command="%s"  CommandPara1="%s" CommandPara2="%s"  CommandPara3="0">
+	//	</sip_xml>`, channel.DeviceID, PTZCmd, landscape, portrait)
+
+	request.SetBody(string(dest), true)
 	resp, err := d.SipRequestForResponse(request)
 	if err != nil {
 		return http.StatusRequestTimeout
@@ -372,12 +413,10 @@ func (channel *Channel) Invite(opt *InviteOptions) (code int, err error) {
 		"v=0",
 		fmt.Sprintf("o=- 0 0 IN IP4 %s", d.mediaIP),
 		"s=" + s,
-		"u=" + channel.DeviceID + ":0",
 		"c=IN IP4 " + d.mediaIP,
-		opt.String(),
-		//fmt.Sprintf("m=video %d %sRTP/AVP 96", opt.MediaPort, protocol),
-		//"a=recvonly",
-		//"a=rtpmap:96 PS/90000",
+		//"u=" + channel.DeviceID + ":0",
+
+		//opt.String(),
 		fmt.Sprintf("m=video %d RTP/AVP 100", opt.MediaPort),
 		"y=" + opt.ssrc,
 		"a=rtpmap:100 H264/90000",
@@ -544,18 +583,57 @@ func getSipRespErrorCode(err error) int {
 }
 
 // Capture 图片抓拍
-func (channel *Channel) Capture(imgSrv, timeRange string, snapType, interval int) int {
+func (channel *Channel) Capture(imgSrv, timeRange, snapType, interval string) int {
 	d := channel.device
 	request := d.CreateRequest(sip.MESSAGE)
 	contentType := sip.ContentType("Application/MANSCDP+xml")
 	request.AppendHeader(&contentType)
 
-	body := fmt.Sprintf(` <?xml version="1.0" encoding="UTF-8"?>
-	<sip_xml EventType="Camera_Snap">
-    	<item Code="%s" PicServer="%s" SnapType =%d Range="%s" Interval=%d>
-  	</sip_xml>`, channel.DeviceID, imgSrv, snapType, timeRange, interval)
+	c := struct {
+		XMLName   xml.Name `xml:"sip_xml"`
+		Text      string   `xml:",chardata"`
+		EventType string   `xml:"EventType,attr"`
+		Item      struct {
+			Text      string `xml:",chardata"`
+			Code      string `xml:"Code,attr"`
+			PicServer string `xml:"PicServer,attr"`
+			SnapType  string `xml:"SnapType,attr"`
+			Range     string `xml:"Range,attr"`
+			Interval  string `xml:"Interval,attr"`
+		} `xml:"item"`
+	}{
+		XMLName:   xml.Name{},
+		Text:      "",
+		EventType: "Camera_Snap",
+		Item: struct {
+			Text      string `xml:",chardata"`
+			Code      string `xml:"Code,attr"`
+			PicServer string `xml:"PicServer,attr"`
+			SnapType  string `xml:"SnapType,attr"`
+			Range     string `xml:"Range,attr"`
+			Interval  string `xml:"Interval,attr"`
+		}{Code: channel.DeviceID, PicServer: imgSrv, SnapType: snapType, Range: timeRange, Interval: interval},
+	}
 
-	request.SetBody(body, true)
+	raw, err := xml.Marshal(c)
+	if err != nil {
+		GB28181Plugin.Error(err.Error())
+		return -1
+	}
+
+	header := []byte(`<?xml version="1.0" encoding="UTF-8"?>`)
+
+	dest := make([]byte, len(header)+len(raw))
+	copy(dest, header)
+	copy(dest[len(header):], raw)
+	fmt.Println(string(dest))
+
+	//body := fmt.Sprintf(` <?xml version="1.0" encoding="UTF-8"?>
+	//<sip_xml EventType="Camera_Snap">
+	//	<item Code="%s" PicServer="%s" SnapType =%d Range="%s" Interval=%d>
+	//</sip_xml>`, channel.DeviceID, imgSrv, snapType, timeRange, interval)
+
+	request.SetBody(string(dest), true)
 	resp, err := d.SipRequestForResponse(request)
 	if err != nil {
 		return http.StatusRequestTimeout
