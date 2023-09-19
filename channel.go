@@ -1,4 +1,4 @@
-package gb28181
+package b
 
 import (
 	"encoding/xml"
@@ -14,8 +14,8 @@ import (
 	"go.uber.org/zap"
 	. "m7s.live/engine/v4"
 	"m7s.live/engine/v4/log"
-	"m7s.live/plugin/gb28181/v4/utils"
 	"m7s.live/plugin/ps/v4"
+	"plugin-b/utils"
 )
 
 var QUERY_RECORD_TIMEOUT = time.Second * 5
@@ -355,7 +355,7 @@ func (channel *Channel) Invite(opt *InviteOptions) (code int, err error) {
 		}
 		defer func() {
 			if err != nil {
-				GB28181Plugin.Error("Invite", zap.Error(err))
+				BPlugin.Error("Invite", zap.Error(err))
 				channel.status.Store(0)
 				if conf.InviteMode == 1 {
 					// 5秒后重试
@@ -617,7 +617,7 @@ func (channel *Channel) Capture(imgSrv, timeRange, snapType, interval string) in
 
 	raw, err := xml.Marshal(c)
 	if err != nil {
-		GB28181Plugin.Error(err.Error())
+		BPlugin.Error(err.Error())
 		return -1
 	}
 

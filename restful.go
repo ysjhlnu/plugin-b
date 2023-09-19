@@ -1,4 +1,4 @@
-package gb28181
+package b
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ var (
 	playScaleValues = map[float32]bool{0.25: true, 0.5: true, 1: true, 2: true, 4: true}
 )
 
-func (c *GB28181Config) API_list(w http.ResponseWriter, r *http.Request) {
+func (c *BConfig) API_list(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	if query.Get("interval") == "" {
 		query.Set("interval", "5s")
@@ -31,7 +31,7 @@ func (c *GB28181Config) API_list(w http.ResponseWriter, r *http.Request) {
 	}, w, r)
 }
 
-func (c *GB28181Config) API_records(w http.ResponseWriter, r *http.Request) {
+func (c *BConfig) API_records(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	id := query.Get("id")
 	channel := query.Get("channel")
@@ -54,7 +54,7 @@ func (c *GB28181Config) API_records(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (c *GB28181Config) API_control(w http.ResponseWriter, r *http.Request) {
+func (c *BConfig) API_control(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	channel := r.URL.Query().Get("channel")
 	ptzcmd := r.URL.Query().Get("ptzcmd")
@@ -67,7 +67,7 @@ func (c *GB28181Config) API_control(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (c *GB28181Config) API_ptz(w http.ResponseWriter, r *http.Request) {
+func (c *BConfig) API_ptz(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	id := q.Get("id")
 	channel := q.Get("channel")
@@ -105,7 +105,7 @@ func (c *GB28181Config) API_ptz(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (c *GB28181Config) API_invite(w http.ResponseWriter, r *http.Request) {
+func (c *BConfig) API_invite(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	id := query.Get("id")
 	channel := query.Get("channel")
@@ -125,25 +125,25 @@ func (c *GB28181Config) API_invite(w http.ResponseWriter, r *http.Request) {
 	}
 	opt.Validate(startTime, endTime)
 	if c := FindChannel(id, channel); c == nil {
-		GB28181Plugin.Error(fmt.Sprintf("device %q channel %q not found", id, channel))
+		BPlugin.Error(fmt.Sprintf("device %q channel %q not found", id, channel))
 		util.ReturnError(util.APIErrorNotFound, fmt.Sprintf("device %q channel %q not found", id, channel), w, r)
 	} else if opt.IsLive() && c.status.Load() > 0 {
-		GB28181Plugin.Warn("live stream already exists")
+		BPlugin.Warn("live stream already exists")
 		util.ReturnError(util.APIErrorQueryParse, "live stream already exists", w, r)
 	} else if code, err := c.Invite(&opt); err == nil {
 		if code == 200 {
 			util.ReturnOK(w, r)
 		} else {
-			GB28181Plugin.Error(fmt.Sprintf("invite return code %d", code))
+			BPlugin.Error(fmt.Sprintf("invite return code %d", code))
 			util.ReturnError(util.APIErrorInternal, fmt.Sprintf("invite return code %d", code), w, r)
 		}
 	} else {
-		GB28181Plugin.Error(err.Error())
+		BPlugin.Error(err.Error())
 		util.ReturnError(util.APIErrorInternal, err.Error(), w, r)
 	}
 }
 
-func (c *GB28181Config) API_bye(w http.ResponseWriter, r *http.Request) {
+func (c *BConfig) API_bye(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	channel := r.URL.Query().Get("channel")
 	streamPath := r.URL.Query().Get("streamPath")
@@ -154,7 +154,7 @@ func (c *GB28181Config) API_bye(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (c *GB28181Config) API_play_pause(w http.ResponseWriter, r *http.Request) {
+func (c *BConfig) API_play_pause(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	channel := r.URL.Query().Get("channel")
 	streamPath := r.URL.Query().Get("streamPath")
@@ -165,7 +165,7 @@ func (c *GB28181Config) API_play_pause(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (c *GB28181Config) API_play_resume(w http.ResponseWriter, r *http.Request) {
+func (c *BConfig) API_play_resume(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	channel := r.URL.Query().Get("channel")
 	streamPath := r.URL.Query().Get("streamPath")
@@ -176,7 +176,7 @@ func (c *GB28181Config) API_play_resume(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-func (c *GB28181Config) API_play_seek(w http.ResponseWriter, r *http.Request) {
+func (c *BConfig) API_play_seek(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	channel := r.URL.Query().Get("channel")
 	streamPath := r.URL.Query().Get("streamPath")
@@ -193,7 +193,7 @@ func (c *GB28181Config) API_play_seek(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (c *GB28181Config) API_play_forward(w http.ResponseWriter, r *http.Request) {
+func (c *BConfig) API_play_forward(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	channel := r.URL.Query().Get("channel")
 	streamPath := r.URL.Query().Get("streamPath")
@@ -211,7 +211,7 @@ func (c *GB28181Config) API_play_forward(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func (c *GB28181Config) API_position(w http.ResponseWriter, r *http.Request) {
+func (c *BConfig) API_position(w http.ResponseWriter, r *http.Request) {
 	//CORS(w, r)
 	query := r.URL.Query()
 	//设备id
@@ -245,12 +245,12 @@ type DevicePosition struct {
 	Latitude  string    //纬度
 }
 
-func (c *GB28181Config) API_get_position(w http.ResponseWriter, r *http.Request) {
+func (c *BConfig) API_get_position(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	//设备id
 	id := query.Get("id")
 	if query.Get("interval") == "" {
-		query.Set("interval", fmt.Sprintf("%ds", c.Position.Interval.Seconds()))
+		query.Set("interval", fmt.Sprintf("%fs", c.Position.Interval.Seconds()))
 	}
 	util.ReturnFetchValue(func() (list []*DevicePosition) {
 		if id == "" {
@@ -269,7 +269,7 @@ func (c *GB28181Config) API_get_position(w http.ResponseWriter, r *http.Request)
 	}, w, r)
 }
 
-func (c *GB28181Config) API_capture(w http.ResponseWriter, r *http.Request) {
+func (c *BConfig) API_capture(w http.ResponseWriter, r *http.Request) {
 
 	id := r.URL.Query().Get("id")
 	snapType := r.URL.Query().Get("snapType")
@@ -285,7 +285,7 @@ func (c *GB28181Config) API_capture(w http.ResponseWriter, r *http.Request) {
 }
 
 // API_ImgUpload 抓图上传http图片文件
-func (c *GB28181Config) API_ImgUpload(w http.ResponseWriter, r *http.Request) {
+func (c *BConfig) API_ImgUpload(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
@@ -321,6 +321,6 @@ func (c *GB28181Config) API_ImgUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 // API_device_info 设备基本信息获取
-func (c *GB28181Config) API_device_info(w http.ResponseWriter, r *http.Request) {
+func (c *BConfig) API_device_info(w http.ResponseWriter, r *http.Request) {
 
 }

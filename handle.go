@@ -1,4 +1,4 @@
-package gb28181
+package b
 
 import (
 	"bytes"
@@ -32,7 +32,7 @@ func (a *Authorization) Verify(username, passwd, realm, nonce string) bool {
 	r2 := a.getDigest(s2)
 
 	if r1 == "" || r2 == "" {
-		GB28181Plugin.Error("Authorization algorithm wrong")
+		BPlugin.Error("Authorization algorithm wrong")
 		return false
 	}
 	//3、将密文 1，nonce 和密文 2 依次组合获取 1 个字符串，并对这个字符串使用算法加密，获得密文 r3，即Response
@@ -52,22 +52,22 @@ func (a *Authorization) getDigest(raw string) string {
 	}
 }
 
-func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
+func (c *BConfig) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 	from, ok := req.From()
 	if !ok || from.Address == nil {
-		GB28181Plugin.Error("OnRegister", zap.String("error", "no from"))
+		BPlugin.Error("OnRegister", zap.String("error", "no from"))
 		return
 	}
 	id := from.Address.User().String()
 
-	GB28181Plugin.Debug("SIP<-OnMessage", zap.String("id", id), zap.String("source", req.Source()), zap.String("req", req.String()))
+	BPlugin.Debug("SIP<-OnMessage", zap.String("id", id), zap.String("source", req.Source()), zap.String("req", req.String()))
 
 	isUnregister := false
 	if exps := req.GetHeaders("Expires"); len(exps) > 0 {
 		exp := exps[0]
 		expSec, err := strconv.ParseInt(exp.Value(), 10, 32)
 		if err != nil {
-			GB28181Plugin.Info("OnRegister",
+			BPlugin.Info("OnRegister",
 				zap.String("error", fmt.Sprintf("wrong expire header value %q", exp)),
 				zap.String("id", id),
 				zap.String("source", req.Source()),
@@ -78,7 +78,7 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 			isUnregister = true
 		}
 	} else {
-		GB28181Plugin.Info("OnRegister",
+		BPlugin.Info("OnRegister",
 			zap.String("error", "has no expire header"),
 			zap.String("id", id),
 			zap.String("source", req.Source()),
@@ -86,14 +86,14 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 		return
 	}
 
-	GB28181Plugin.Info("OnRegister",
+	BPlugin.Info("OnRegister",
 		zap.Bool("isUnregister", isUnregister),
 		zap.String("id", id),
 		zap.String("source", req.Source()),
 		zap.String("destination", req.Destination()))
 
 	if len(id) != 18 {
-		GB28181Plugin.Info("Wrong B-Interface 编码长度错误", zap.String("id", id))
+		BPlugin.Info("Wrong B-Interface 编码长度错误", zap.String("id", id))
 		return
 	}
 	passAuth := false
@@ -131,12 +131,12 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 	}
 	if passAuth {
 		// 通过校验
-		GB28181Plugin.Info("密码校验通过")
+		BPlugin.Info("密码校验通过")
 		var d *Device
 		if isUnregister {
 			tmpd, ok := Devices.LoadAndDelete(id)
 			if ok {
-				GB28181Plugin.Info("Unregister Device", zap.String("id", id))
+				BPlugin.Info("Unregister Device", zap.String("id", id))
 				d = tmpd.(*Device)
 			} else {
 				return
@@ -151,8 +151,8 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 		}
 
 		// 删除nonce,在刷新注册的时候会提示401然后返回nonce再注册成功
-		GB28181Plugin.Sugar().Infof("%s--删除nonce", id)
-		GB28181Plugin.Sugar().Infof("%s--删除注册次数", id)
+		BPlugin.Sugar().Infof("%s--删除nonce", id)
+		BPlugin.Sugar().Infof("%s--删除注册次数", id)
 		DeviceNonce.Delete(id)
 		DeviceRegisterCount.Delete(id)
 
@@ -168,7 +168,7 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 		})
 		_ = tx.Respond(resp)
 
-		GB28181Plugin.Debug("获取设备信息")
+		BPlugin.Debug("获取设备信息")
 		if !isUnregister {
 			go d.QueryDeviceInfo()
 			go d.DeviceWorkInfo(0xFFFFFFFF)
@@ -179,8 +179,8 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 		}
 	} else {
 		// 未通过校验
-		GB28181Plugin.Info("密码未通过校验")
-		GB28181Plugin.Info("OnRegister unauthorized", zap.String("id", id), zap.String("source", req.Source()),
+		BPlugin.Info("密码未通过校验")
+		BPlugin.Info("OnRegister unauthorized", zap.String("id", id), zap.String("source", req.Source()),
 			zap.String("destination", req.Destination()))
 		response := sip.NewResponseFromRequest("", req, http.StatusUnauthorized, "Unauthorized", "")
 		_nonce, _ := DeviceNonce.LoadOrStore(id, utils.RandNumString(32))
@@ -209,10 +209,10 @@ func (d *Device) syncChannels() {
 	}
 }
 
-func (c *GB28181Config) OnMessage(req sip.Request, tx sip.ServerTransaction) {
+func (c *BConfig) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 	from, _ := req.From()
 	id := from.Address.User().String()
-	GB28181Plugin.Debug("SIP<-OnMessage", zap.String("id", id), zap.String("source", req.Source()), zap.String("req", req.String()))
+	BPlugin.Debug("SIP<-OnMessage", zap.String("id", id), zap.String("source", req.Source()), zap.String("req", req.String()))
 	if v, ok := Devices.Load(id); ok {
 		d := v.(*Device)
 		switch d.Status {
@@ -250,7 +250,7 @@ func (c *GB28181Config) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 		if err != nil {
 			err = utils.DecodeGbk(gen, []byte(req.Body()))
 			if err != nil {
-				GB28181Plugin.Error("decode catelog err", zap.Error(err))
+				BPlugin.Error("decode catelog err", zap.Error(err))
 			}
 		}
 
@@ -272,7 +272,7 @@ func (c *GB28181Config) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 			//在KeepLive 进行位置订阅的处理，如果开启了自动订阅位置，则去订阅位置
 			if c.Position.AutosubPosition && time.Since(d.GpsTime) > c.Position.Interval*2 {
 				d.MobilePositionSubscribe(d.ID, c.Position.Expires, c.Position.Interval)
-				GB28181Plugin.Debug("Mobile Position Subscribe", zap.String("deviceID", d.ID))
+				BPlugin.Debug("Mobile Position Subscribe", zap.String("deviceID", d.ID))
 			}
 		case "Catalog":
 			//d.UpdateChannels(temp.DeviceList...)
@@ -312,11 +312,11 @@ func (c *GB28181Config) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 			if err != nil {
 				err = utils.DecodeGbk(devInfo, []byte(req.Body()))
 				if err != nil {
-					GB28181Plugin.Error("decode Station_Response_GetSystemInfo err", zap.Error(err))
+					BPlugin.Error("decode Station_Response_GetSystemInfo err", zap.Error(err))
 				}
 			}
 
-			GB28181Plugin.Sugar().Debugf("%#v", devInfo)
+			BPlugin.Sugar().Debugf("%#v", devInfo)
 
 			// 主设备信息
 			d.Name = devInfo.Item.Code
@@ -364,11 +364,11 @@ func (c *GB28181Config) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 			if err != nil {
 				err = utils.DecodeGbk(workState, []byte(req.Body()))
 				if err != nil {
-					GB28181Plugin.Error("decode Station_Response_GetSystemInfo err", zap.Error(err))
+					BPlugin.Error("decode Station_Response_GetSystemInfo err", zap.Error(err))
 				}
 			}
 
-			GB28181Plugin.Sugar().Debugf("%#v", workState)
+			BPlugin.Sugar().Debugf("%#v", workState)
 
 		case "Station_Response_GetCapability":
 			d.Debug("响应获取前端能力集")
@@ -395,11 +395,11 @@ func (c *GB28181Config) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 			if err != nil {
 				err = utils.DecodeGbk(ability, []byte(req.Body()))
 				if err != nil {
-					GB28181Plugin.Error("decode Station_Response_GetSystemInfo err", zap.Error(err))
+					BPlugin.Error("decode Station_Response_GetSystemInfo err", zap.Error(err))
 				}
 			}
 
-			GB28181Plugin.Sugar().Debugf("%#v", ability)
+			BPlugin.Sugar().Debugf("%#v", ability)
 
 		default:
 			d.Warn("Not supported EventType", zap.String("EventType", gen.EventType), zap.String("body", req.Body()))
@@ -410,15 +410,15 @@ func (c *GB28181Config) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 
 		tx.Respond(sip.NewResponseFromRequest("", req, http.StatusOK, "OK", body))
 	} else {
-		GB28181Plugin.Debug("Unauthorized message, device not found", zap.String("id", id))
+		BPlugin.Debug("Unauthorized message, device not found", zap.String("id", id))
 	}
 }
-func (c *GB28181Config) OnBye(req sip.Request, tx sip.ServerTransaction) {
+func (c *BConfig) OnBye(req sip.Request, tx sip.ServerTransaction) {
 	tx.Respond(sip.NewResponseFromRequest("", req, http.StatusOK, "OK", ""))
 }
 
 // OnNotify 订阅通知处理
-func (c *GB28181Config) OnNotify(req sip.Request, tx sip.ServerTransaction) {
+func (c *BConfig) OnNotify(req sip.Request, tx sip.ServerTransaction) {
 	from, _ := req.From()
 	id := from.Address.User().String()
 	if v, ok := Devices.Load(id); ok {
@@ -437,11 +437,11 @@ func (c *GB28181Config) OnNotify(req sip.Request, tx sip.ServerTransaction) {
 		if err != nil {
 			err = utils.DecodeGbk(g, []byte(req.Body()))
 			if err != nil {
-				GB28181Plugin.Error("decode catelog err", zap.Error(err))
+				BPlugin.Error("decode catelog err", zap.Error(err))
 			}
 		}
 
-		GB28181Plugin.Sugar().Debugf("通用解析： %#v", g)
+		BPlugin.Sugar().Debugf("通用解析： %#v", g)
 
 		temp := &struct {
 			XMLName   xml.Name `xml:"SIP_XML"`
@@ -472,7 +472,7 @@ func (c *GB28181Config) OnNotify(req sip.Request, tx sip.ServerTransaction) {
 		if err != nil {
 			err = utils.DecodeGbk(temp, []byte(req.Body()))
 			if err != nil {
-				GB28181Plugin.Error("decode catelog err", zap.Error(err))
+				BPlugin.Error("decode catelog err", zap.Error(err))
 			}
 		}
 
@@ -481,7 +481,7 @@ func (c *GB28181Config) OnNotify(req sip.Request, tx sip.ServerTransaction) {
 
 		case "Push_Resourse": // 资源上报
 			// 资源上报属于数据接口。前端系统加电启动并初次注册成功后，应向平台上报前端系统的设备资源信息
-			GB28181Plugin.Debug("资源上报")
+			BPlugin.Debug("资源上报")
 			deviceList := make([]*notifyMessage, 0, len(temp.SubList.Item))
 			for _, t := range temp.SubList.Item {
 
@@ -507,7 +507,7 @@ func (c *GB28181Config) OnNotify(req sip.Request, tx sip.ServerTransaction) {
 					Longitude:    t.Longitude,
 				})
 			}
-			GB28181Plugin.Sugar().Debugf("%#v", deviceList)
+			BPlugin.Sugar().Debugf("%#v", deviceList)
 			d.UpdateChannelStatus(deviceList)
 		case "Snapshot_Notify": // 图像数据上报通知
 
@@ -532,7 +532,7 @@ func (c *GB28181Config) OnNotify(req sip.Request, tx sip.ServerTransaction) {
 			if err != nil {
 				err = utils.DecodeGbk(sn, []byte(req.Body()))
 				if err != nil {
-					GB28181Plugin.Error("decode catelog err", zap.Error(err))
+					BPlugin.Error("decode catelog err", zap.Error(err))
 				}
 			}
 

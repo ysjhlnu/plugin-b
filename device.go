@@ -1,4 +1,4 @@
-package gb28181
+package b
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap"
 	"m7s.live/engine/v4"
 	"m7s.live/engine/v4/log"
-	"m7s.live/plugin/gb28181/v4/utils"
+	"plugin-b/utils"
 
 	// . "github.com/logrusorgru/aurora"
 	"github.com/ghettovoice/gosip/sip"
@@ -101,7 +101,7 @@ func (d *Device) MarshalJSON() ([]byte, error) {
 	})
 	return json.Marshal(data)
 }
-func (c *GB28181Config) RecoverDevice(d *Device, req sip.Request) {
+func (c *BConfig) RecoverDevice(d *Device, req sip.Request) {
 	from, _ := req.From()
 	d.addr = sip.Address{
 		DisplayName: from.DisplayName,
@@ -135,7 +135,7 @@ func (c *GB28181Config) RecoverDevice(d *Device, req sip.Request) {
 	d.UpdateTime = time.Now()
 }
 
-func (c *GB28181Config) StoreDevice(id string, req sip.Request) (d *Device) {
+func (c *BConfig) StoreDevice(id string, req sip.Request) (d *Device) {
 	from, _ := req.From()
 	deviceAddr := sip.Address{
 		DisplayName: from.DisplayName,
@@ -177,7 +177,7 @@ func (c *GB28181Config) StoreDevice(id string, req sip.Request) (d *Device) {
 			sipIP:        sipIP,
 			mediaIP:      mediaIp,
 			NetAddr:      deviceIp,
-			Logger:       GB28181Plugin.With(zap.String("id", id)),
+			Logger:       BPlugin.With(zap.String("id", id)),
 		}
 		d.Info("StoreDevice", zap.String("deviceIp", deviceIp), zap.String("servIp", servIp), zap.String("sipIP", sipIP), zap.String("mediaIp", mediaIp))
 		Devices.Store(id, d)
@@ -185,7 +185,7 @@ func (c *GB28181Config) StoreDevice(id string, req sip.Request) (d *Device) {
 	}
 	return
 }
-func (c *GB28181Config) ReadDevices() {
+func (c *BConfig) ReadDevices() {
 	if f, err := os.OpenFile("devices.json", os.O_RDONLY, 0644); err == nil {
 		defer f.Close()
 		var items []*Device
@@ -193,14 +193,14 @@ func (c *GB28181Config) ReadDevices() {
 			for _, item := range items {
 				if time.Since(item.UpdateTime) < conf.RegisterValidity {
 					item.Status = "RECOVER"
-					item.Logger = GB28181Plugin.With(zap.String("id", item.ID))
+					item.Logger = BPlugin.With(zap.String("id", item.ID))
 					Devices.Store(item.ID, item)
 				}
 			}
 		}
 	}
 }
-func (c *GB28181Config) SaveDevices() {
+func (c *BConfig) SaveDevices() {
 	var item []any
 	Devices.Range(func(key, value any) bool {
 		item = append(item, value)
@@ -388,13 +388,13 @@ func (d *Device) Catalog() int {
 	request.AppendHeader(&expires)
 	request.SetBody(BuildCatalogXML(d.sn, d.ID), true)
 	// 输出Sip请求设备通道信息信令
-	GB28181Plugin.Sugar().Debugf("SIP->Catalog:%s", request)
+	BPlugin.Sugar().Debugf("SIP->Catalog:%s", request)
 	resp, err := d.SipRequestForResponse(request)
 	if err == nil && resp != nil {
-		GB28181Plugin.Sugar().Debugf("SIP<-Catalog Response: %s", resp.String())
+		BPlugin.Sugar().Debugf("SIP<-Catalog Response: %s", resp.String())
 		return int(resp.StatusCode())
 	} else if err != nil {
-		GB28181Plugin.Error("SIP<-Catalog error:", zap.Error(err))
+		BPlugin.Error("SIP<-Catalog error:", zap.Error(err))
 	}
 	return http.StatusRequestTimeout
 }
@@ -407,7 +407,7 @@ func (d *Device) QueryDeviceInfo() {
 		contentType := sip.ContentType("Application/MANSCDP+xml")
 		request.AppendHeader(&contentType)
 		request.SetBody(BuildDeviceInfoXML(d.ID), true)
-		GB28181Plugin.Sugar().Debugf("设备基本信息获取")
+		BPlugin.Sugar().Debugf("设备基本信息获取")
 		response, _ := d.SipRequestForResponse(request)
 		if response != nil {
 			// via, _ := response.ViaHop()
@@ -430,7 +430,7 @@ func (d *Device) DeviceWorkInfo(infoType uint32) {
 	contentType := sip.ContentType("Application/MANSCDP+xml")
 	request.AppendHeader(&contentType)
 	request.SetBody(BuildDeviceWorkInfoXML(d.ID, infoType), true)
-	GB28181Plugin.Sugar().Debugf("设备工作状态获取")
+	BPlugin.Sugar().Debugf("设备工作状态获取")
 	response, _ := d.SipRequestForResponse(request)
 	if response != nil {
 		// via, _ := response.ViaHop()
@@ -451,7 +451,7 @@ func (d *Device) GetFrontAbility() {
 	contentType := sip.ContentType("Application/MANSCDP+xml")
 	request.AppendHeader(&contentType)
 	request.SetBody(BuildTheFrontedCapability(d.ID), true)
-	GB28181Plugin.Sugar().Debugf("请求获取前端支持的能力集")
+	BPlugin.Sugar().Debugf("请求获取前端支持的能力集")
 	response, _ := d.SipRequestForResponse(request)
 	if response != nil {
 		// via, _ := response.ViaHop()

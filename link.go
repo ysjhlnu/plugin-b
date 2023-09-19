@@ -1,4 +1,4 @@
-package gb28181
+package b
 
 import (
 	"fmt"
@@ -87,7 +87,7 @@ func (c *recordQueryLink) doPut(deviceId, channelId string, sn, sum int, record 
 		r.finished = true
 	}
 	c.pendingResult[key] = r
-	GB28181Plugin.Logger.Debug("put record",
+	BPlugin.Logger.Debug("put record",
 		zap.String("key", key),
 		zap.Int("sum", sum),
 		zap.Int("count", len(r.list)))
@@ -115,5 +115,5 @@ func (c *recordQueryLink) notify(key string, r recordQueryResult) {
 	defer c.Unlock()
 	delete(c.pendingResp, key)
 	delete(c.pendingResult, key)
-	GB28181Plugin.Logger.Debug("record notify", zap.String("key", key))
+	BPlugin.Logger.Debug("record notify", zap.String("key", key))
 }

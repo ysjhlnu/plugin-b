@@ -1,24 +1,23 @@
-package gb28181
+package b
 
 import (
-	"os"
-	"strings"
-	"sync"
-	"time"
-
 	myip "github.com/husanpao/ip"
 	"go.uber.org/zap"
 	. "m7s.live/engine/v4"
 	"m7s.live/engine/v4/util"
+	"os"
+	"strings"
+	"sync"
+	"time"
 )
 
-type GB28181PositionConfig struct {
+type BPositionConfig struct {
 	AutosubPosition bool          //是否自动订阅定位
 	Expires         time.Duration `default:"3600s"` //订阅周期(单位：秒)
 	Interval        time.Duration `default:"6s"`    //订阅间隔（单位：秒）
 }
 
-type GB28181Config struct {
+type BConfig struct {
 	InviteMode int    `default:"1"` //邀请模式，0:手动拉流，1:预拉流，2:按需拉流
 	InviteIDs  string //按照国标gb28181协议允许邀请的设备类型:132 摄像机 NVR
 	ListenAddr string `default:"0.0.0.0"`
@@ -58,12 +57,12 @@ type GB28181Config struct {
 	tcpPorts PortManager
 	udpPorts PortManager
 
-	Position GB28181PositionConfig //关于定位的配置参数
+	Position BPositionConfig //关于定位的配置参数
 
 }
 
 // initRoutes 初始化路线
-func (c *GB28181Config) initRoutes() {
+func (c *BConfig) initRoutes() {
 	c.routes = make(map[string]string)
 	tempIps := myip.LocalAndInternalIPs()
 	for k, v := range tempIps {
@@ -72,10 +71,10 @@ func (c *GB28181Config) initRoutes() {
 			c.routes[k[0:lastdot]] = k
 		}
 	}
-	GB28181Plugin.Info("LocalAndInternalIPs", zap.Any("routes", c.routes))
+	BPlugin.Info("LocalAndInternalIPs", zap.Any("routes", c.routes))
 }
 
-func (c *GB28181Config) OnEvent(event any) {
+func (c *BConfig) OnEvent(event any) {
 	switch e := event.(type) {
 	case FirstConfig:
 		if c.Port.Sip != "udp:5060" {
@@ -132,11 +131,11 @@ func (c *GB28181Config) OnEvent(event any) {
 	}
 }
 
-func (c *GB28181Config) IsMediaNetworkTCP() bool {
+func (c *BConfig) IsMediaNetworkTCP() bool {
 	return strings.ToLower(c.MediaNetwork) == "tcp"
 }
 
-var conf GB28181Config
+var conf BConfig
 
-var GB28181Plugin = InstallPlugin(&conf)
+var BPlugin = InstallPlugin(&conf)
 var PullStreams sync.Map //拉流

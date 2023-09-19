@@ -1,19 +1,17 @@
-package gb28181
+package b
 
 import (
 	"context"
 	"fmt"
-	"strconv"
-	"strings"
-	"time"
-
-	"github.com/logrusorgru/aurora"
-	"go.uber.org/zap"
-	"m7s.live/plugin/gb28181/v4/utils"
-
 	"github.com/ghettovoice/gosip"
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
+	"github.com/logrusorgru/aurora"
+	"go.uber.org/zap"
+	"plugin-b/utils"
+	"strconv"
+	"strings"
+	"time"
 )
 
 var srv gosip.Server
@@ -115,10 +113,10 @@ func RequestForResponse(transport string, request sip.Request,
 	return (GetSipServer(transport)).RequestWithContext(context.Background(), request, options...)
 }
 
-func (c *GB28181Config) startServer() {
+func (c *BConfig) startServer() {
 	addr := c.ListenAddr + ":" + strconv.Itoa(int(c.SipPort))
 
-	logger := utils.NewZapLogger(GB28181Plugin.Logger, "GB SIP Server", nil)
+	logger := utils.NewZapLogger(BPlugin.Logger, "GB SIP Server", nil)
 	logger.SetLevel(levelMap[c.LogLevel])
 	// logger := log.NewDefaultLogrusLogger().WithPrefix("GB SIP Server")
 	srvConf := gosip.ServerConfig{}
@@ -132,9 +130,9 @@ func (c *GB28181Config) startServer() {
 	srv.OnRequest(sip.BYE, c.OnBye)
 	err := srv.Listen(strings.ToLower(c.SipNetwork), addr)
 	if err != nil {
-		GB28181Plugin.Logger.Error("gb28181 server listen", zap.Error(err))
+		BPlugin.Logger.Error("gb28181 server listen", zap.Error(err))
 	} else {
-		GB28181Plugin.Info(fmt.Sprint(aurora.Green("Server gb28181 start at"), aurora.BrightBlue(addr)))
+		BPlugin.Info(fmt.Sprint(aurora.Green("Server gb28181 start at"), aurora.BrightBlue(addr)))
 	}
 
 	if c.MediaNetwork == "tcp" {
@@ -161,11 +159,11 @@ func (c *GB28181Config) startServer() {
 // }
 
 // 定时任务
-func (c *GB28181Config) startJob() {
+func (c *BConfig) startJob() {
 	statusTick := time.NewTicker(c.HeartbeatInterval / 2)
 	banTick := time.NewTicker(c.RemoveBanInterval)
 	linkTick := time.NewTicker(time.Millisecond * 100)
-	GB28181Plugin.Debug("start job")
+	BPlugin.Debug("start job")
 	for {
 		select {
 		case <-banTick.C:
@@ -180,7 +178,7 @@ func (c *GB28181Config) startJob() {
 	}
 }
 
-func (c *GB28181Config) removeBanDevice() {
+func (c *BConfig) removeBanDevice() {
 	DeviceRegisterCount.Range(func(key, value interface{}) bool {
 		if value.(int) > MaxRegisterCount {
 			DeviceRegisterCount.Delete(key)
@@ -193,12 +191,12 @@ func (c *GB28181Config) removeBanDevice() {
 // -  当设备超过 3 倍心跳时间未发送过心跳（通过 UpdateTime 判断）, 视为离线
 // - 	当设备超过注册有效期内为发送过消息，则从设备列表中删除
 // UpdateTime 在设备发送心跳之外的消息也会被更新，相对于 LastKeepaliveAt 更能体现出设备最会一次活跃的时间
-func (c *GB28181Config) statusCheck() {
+func (c *BConfig) statusCheck() {
 	Devices.Range(func(key, value any) bool {
 		d := value.(*Device)
 		if time.Since(d.UpdateTime) > c.RegisterValidity {
 			Devices.Delete(key)
-			GB28181Plugin.Info("Device register timeout",
+			BPlugin.Info("Device register timeout",
 				zap.String("id", d.ID),
 				zap.Time("registerTime", d.RegisterTime),
 				zap.Time("updateTime", d.UpdateTime),
@@ -210,7 +208,7 @@ func (c *GB28181Config) statusCheck() {
 				ch.Status = ChannelOffStatus
 				return true
 			})
-			GB28181Plugin.Info("Device offline", zap.String("id", d.ID), zap.Time("updateTime", d.UpdateTime))
+			BPlugin.Info("Device offline", zap.String("id", d.ID), zap.Time("updateTime", d.UpdateTime))
 		}
 		return true
 	})
