@@ -210,7 +210,11 @@ func (d *Device) syncChannels() {
 }
 
 func (c *BConfig) OnMessage(req sip.Request, tx sip.ServerTransaction) {
-	from, _ := req.From()
+	from, ok := req.From()
+	if !ok || from.Address == nil {
+		BPlugin.Error("OnMessage", zap.String("error", "no from"))
+		return
+	}
 	id := from.Address.User().String()
 	BPlugin.Debug("SIP<-OnMessage", zap.String("id", id), zap.String("source", req.Source()), zap.String("req", req.String()))
 	if v, ok := Devices.Load(id); ok {
@@ -419,7 +423,11 @@ func (c *BConfig) OnBye(req sip.Request, tx sip.ServerTransaction) {
 
 // OnNotify 订阅通知处理
 func (c *BConfig) OnNotify(req sip.Request, tx sip.ServerTransaction) {
-	from, _ := req.From()
+	from, ok := req.From()
+	if !ok || from.Address == nil {
+		BPlugin.Error("OnNotify", zap.String("error", "no from"))
+		return
+	}
 	id := from.Address.User().String()
 	if v, ok := Devices.Load(id); ok {
 		d := v.(*Device)
