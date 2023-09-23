@@ -60,9 +60,7 @@ require (
 	golang.org/x/sys v0.11.0 // indirect
 	golang.org/x/term v0.11.0 // indirect
 	golang.org/x/tools v0.9.1 // indirect
-	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-
-replace m7s.live/engine/v4 => /home/cqset/code/go/src/github.com/ysjhlnu/self_monibuca/engine
+replace m7s.live/engine/v4 => /Users/ts/code/go/github.com/ysjhlnu/engine
