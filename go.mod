@@ -63,3 +63,6 @@ require (
 	google.golang.org/protobuf v1.30.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+
+replace m7s.live/engine/v4 => /home/cqset/code/go/src/github.com/ysjhlnu/self_monibuca/engine

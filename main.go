@@ -19,9 +19,12 @@ type GB28181PositionConfig struct {
 }
 
 type GB28181Config struct {
-	InviteMode int    `default:"1"` //邀请模式，0:手动拉流，1:预拉流，2:按需拉流
-	InviteIDs  string //按照国标gb28181协议允许邀请的设备类型:132 摄像机 NVR
-	ListenAddr string `default:"0.0.0.0"`
+	MysqlHost     string // mysql 地址
+	MysqlUser     string // mysql 用户名
+	MysqlPassword string // mysql 密码
+	InviteMode    int    `default:"1"` //邀请模式，0:手动拉流，1:预拉流，2:按需拉流
+	InviteIDs     string //按照国标gb28181协议允许邀请的设备类型:132 摄像机 NVR
+	ListenAddr    string `default:"0.0.0.0"`
 	//sip服务器的配置
 	SipNetwork string   `default:"udp"` //传输协议，默认UDP，可选TCP
 	SipIP      string   //sip 服务器公网IP
@@ -89,7 +92,7 @@ func (c *GB28181Config) OnEvent(event any) {
 				c.MediaPortMin = ports[0]
 				c.MediaPortMax = ports[1]
 			} else {
-				c.MediaPortMin = 0 
+				c.MediaPortMin = 0
 				c.MediaPortMax = 0
 				c.MediaPort = ports[0]
 			}
