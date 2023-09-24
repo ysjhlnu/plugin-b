@@ -62,7 +62,7 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 
 	GB28181Plugin.Debug("SIP<-OnMessage", zap.String("id", id), zap.String("source", req.Source()), zap.String("req", req.String()))
 
-	isUnregister := false
+	isUnregister := false // false: 表示未注册,true: 已注册
 	if exps := req.GetHeaders("Expires"); len(exps) > 0 {
 		exp := exps[0]
 		expSec, err := strconv.ParseInt(exp.Value(), 10, 32)
@@ -140,6 +140,7 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 				return
 			}
 		} else {
+			//
 			if v, ok := Devices.Load(id); ok {
 				d = v.(*Device)
 				c.RecoverDevice(d, req)
@@ -147,7 +148,9 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 				d = c.StoreDevice(id, req)
 			}
 		}
+		// 将已经使用过的nonce从管理器中删除，避免下一次刷新注册使用同一个nonce
 		DeviceNonce.Delete(id)
+		// 已经注册上后删除已经注册的次数
 		DeviceRegisterCount.Delete(id)
 		resp := sip.NewResponseFromRequest("", req, http.StatusOK, "OK", "")
 		to, _ := resp.To()
@@ -189,7 +192,7 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 func (d *Device) syncChannels() {
 	if time.Since(d.lastSyncTime) > 2*conf.HeartbeatInterval {
 		d.lastSyncTime = time.Now()
-		d.Catalog()
+		d.Catalog() // 查询通道
 		d.Subscribe()
 		d.QueryDeviceInfo()
 	}

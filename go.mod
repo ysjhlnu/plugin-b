@@ -12,7 +12,6 @@ require (
 	golang.org/x/net v0.15.0
 	golang.org/x/text v0.13.0
 	m7s.live/engine/v4 v4.13.12
-	m7s.live/plugin/ps/v4 v4.1.2
 )
 
 require (
@@ -29,6 +28,7 @@ require (
 	github.com/golang/mock v1.6.0 // indirect
 	github.com/google/pprof v0.0.0-20230912144702-c363fe2c2ed8 // indirect
 	github.com/google/uuid v1.3.1 // indirect
+	github.com/logrusorgru/aurora v2.0.3+incompatible // indirect
 	github.com/lufia/plan9stats v0.0.0-20230326075908-cb1d2100619a // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.19 // indirect
@@ -61,6 +61,7 @@ require (
 	golang.org/x/tools v0.13.0 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	m7s.live/plugin/ps/v4 v4.1.2 // indirect
 )
 
 replace m7s.live/engine/v4 => /Users/ts/code/go/github.com/ysjhlnu/engine

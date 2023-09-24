@@ -111,6 +111,7 @@ Scale: %0.6f
 
 type Channel struct {
 	device      *Device      // 所属设备
+	Online      bool         // 通道是否在线
 	status      atomic.Int32 // 通道状态,0:空闲,1:正在invite,2:正在播放
 	LiveSubSP   string       // 实时子码流，通过rtsp
 	GpsTime     time.Time    // gps时间
@@ -160,6 +161,7 @@ type ChannelInfo struct {
 	SafetyWay    int
 	RegisterWay  int
 	Secrecy      int
+	Online       bool
 	Status       ChannelStatus
 }
 

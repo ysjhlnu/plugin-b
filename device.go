@@ -43,7 +43,7 @@ var (
 	DeviceRegisterCount sync.Map //设备注册次数
 )
 
-type DeviceStatus string
+type DeviceStatus string // 下面5个状态值
 
 const (
 	DeviceRegisterStatus = "REGISTER"
@@ -64,6 +64,7 @@ type Device struct {
 	UpdateTime      time.Time
 	LastKeepaliveAt time.Time
 	Status          DeviceStatus
+	Online          bool // 设备在线状态
 	sn              int
 	addr            sip.Address
 	sipIP           string //设备对应网卡的服务器ip
@@ -129,6 +130,7 @@ func (c *GB28181Config) RecoverDevice(d *Device, req sip.Request) {
 	d.UpdateTime = time.Now()
 }
 
+// StoreDevice 保存或者更新设备信息
 func (c *GB28181Config) StoreDevice(id string, req sip.Request) (d *Device) {
 	from, _ := req.From()
 	deviceAddr := sip.Address{
@@ -141,6 +143,7 @@ func (c *GB28181Config) StoreDevice(id string, req sip.Request) (d *Device) {
 		d.UpdateTime = time.Now()
 		d.NetAddr = deviceIp
 		d.addr = deviceAddr
+		d.Online = true
 		d.Debug("UpdateDevice", zap.String("netaddr", d.NetAddr))
 	} else {
 		servIp := req.Recipient().Host()
@@ -167,6 +170,7 @@ func (c *GB28181Config) StoreDevice(id string, req sip.Request) (d *Device) {
 			RegisterTime: time.Now(),
 			UpdateTime:   time.Now(),
 			Status:       DeviceRegisterStatus,
+			Online:       true,
 			addr:         deviceAddr,
 			sipIP:        sipIP,
 			mediaIP:      mediaIp,
@@ -194,6 +198,8 @@ func (c *GB28181Config) ReadDevices() {
 		}
 	}
 }
+
+// SaveDevices 保存设备信息到json文件中
 func (c *GB28181Config) SaveDevices() {
 	var item []any
 	Devices.Range(func(key, value any) bool {
@@ -489,6 +495,7 @@ func (d *Device) UpdateChannelStatus(deviceList []*notifyMessage) {
 				SafetyWay:    v.SafetyWay,
 				RegisterWay:  v.RegisterWay,
 				Secrecy:      v.Secrecy,
+				Online:       true,
 				Status:       ChannelStatus(v.Status),
 			}
 			d.addOrUpdateChannel(channel)
@@ -513,6 +520,7 @@ func (d *Device) UpdateChannelStatus(deviceList []*notifyMessage) {
 				SafetyWay:    v.SafetyWay,
 				RegisterWay:  v.RegisterWay,
 				Secrecy:      v.Secrecy,
+				Online:       true,
 				Status:       ChannelStatus(v.Status),
 			}
 			d.UpdateChannels(channel)
@@ -523,6 +531,7 @@ func (d *Device) UpdateChannelStatus(deviceList []*notifyMessage) {
 func (d *Device) channelOnline(DeviceID string) {
 	if v, ok := d.channelMap.Load(DeviceID); ok {
 		c := v.(*Channel)
+		c.Online = true
 		c.Status = ChannelOnStatus
 		c.Debug("channel online", zap.String("channelId", DeviceID))
 	} else {
@@ -533,6 +542,7 @@ func (d *Device) channelOnline(DeviceID string) {
 func (d *Device) channelOffline(DeviceID string) {
 	if v, ok := d.channelMap.Load(DeviceID); ok {
 		c := v.(*Channel)
+		c.Online = false
 		c.Status = ChannelOffStatus
 		c.Debug("channel offline", zap.String("channelId", DeviceID))
 	} else {

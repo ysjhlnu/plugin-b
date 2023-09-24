@@ -198,15 +198,17 @@ func (c *GB28181Config) statusCheck() {
 		d := value.(*Device)
 		if time.Since(d.UpdateTime) > c.RegisterValidity {
 			Devices.Delete(key)
-			GB28181Plugin.Info("Device register timeout",
+			GB28181Plugin.Info("Device register timeout,从设备管理中删除该设备",
 				zap.String("id", d.ID),
 				zap.Time("registerTime", d.RegisterTime),
 				zap.Time("updateTime", d.UpdateTime),
 			)
 		} else if time.Since(d.UpdateTime) > c.HeartbeatInterval*3 {
+			d.Online = false
 			d.Status = DeviceOfflineStatus
 			d.channelMap.Range(func(key, value any) bool {
 				ch := value.(*Channel)
+				ch.Online = false
 				ch.Status = ChannelOffStatus
 				return true
 			})
