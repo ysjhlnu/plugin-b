@@ -12,6 +12,7 @@ require (
 	golang.org/x/net v0.15.0
 	golang.org/x/text v0.13.0
 	m7s.live/engine/v4 v4.13.12
+	m7s.live/plugin/ps/v4 v4.1.2
 )
 
 require (
@@ -61,7 +62,6 @@ require (
 	golang.org/x/tools v0.13.0 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	m7s.live/plugin/ps/v4 v4.1.2 // indirect
 )
 
 replace m7s.live/engine/v4 => /Users/ts/code/go/github.com/ysjhlnu/engine

@@ -82,6 +82,35 @@ type Device struct {
 	*log.Logger  `json:"-" yaml:"-"`
 }
 
+type DeviceJson struct {
+	//*transaction.Core `json:"-" yaml:"-"`
+	ID              string
+	Name            string
+	Manufacturer    string
+	Model           string
+	Owner           string
+	RegisterTime    time.Time
+	UpdateTime      time.Time
+	LastKeepaliveAt time.Time
+	Status          DeviceStatus
+	Online          bool // 设备在线状态
+	sn              int
+	addr            sip.Address
+	sipIP           string //设备对应网卡的服务器ip
+	mediaIP         string //设备对应网卡的服务器ip
+	NetAddr         string
+	Channels        []ChannelInfo
+	subscriber      struct {
+		CallID  string
+		Timeout time.Time
+	}
+	lastSyncTime time.Time
+	GpsTime      time.Time //gps时间
+	Longitude    string    //经度
+	Latitude     string    //纬度
+	*log.Logger  `json:"-" yaml:"-"`
+}
+
 func (d *Device) MarshalJSON() ([]byte, error) {
 	type Alias Device
 	data := &struct {
@@ -127,6 +156,11 @@ func (c *GB28181Config) RecoverDevice(d *Device, req sip.Request) {
 	d.sipIP = sipIP
 	d.mediaIP = mediaIp
 	d.NetAddr = deviceIp
+	// 从本地json文件恢复设备列表online状态是false才更新设备注册时间
+	if d.Online == false {
+		d.RegisterTime = time.Now()
+	}
+	d.Online = true
 	d.UpdateTime = time.Now()
 }
 
@@ -184,17 +218,58 @@ func (c *GB28181Config) StoreDevice(id string, req sip.Request) (d *Device) {
 	return
 }
 func (c *GB28181Config) ReadDevices() {
+
+	GB28181Plugin.Info("恢复设备列表")
+	var deviceChannel = make(map[string][]ChannelInfo)
+	if f, err := os.OpenFile("devices.json", os.O_RDONLY, 0644); err == nil {
+		defer f.Close()
+		GB28181Plugin.Debug("test")
+
+		var items2 []*DeviceJson
+
+		if err = json.NewDecoder(f).Decode(&items2); err == nil {
+			for _, item := range items2 {
+				deviceChannel[item.ID] = item.Channels
+			}
+		}
+		for _, i := range items2 {
+			GB28181Plugin.Debug(fmt.Sprintf("%#v", *i))
+		}
+
+		GB28181Plugin.Debug("test2")
+	}
+
 	if f, err := os.OpenFile("devices.json", os.O_RDONLY, 0644); err == nil {
 		defer f.Close()
 		var items []*Device
+
 		if err = json.NewDecoder(f).Decode(&items); err == nil {
 			for _, item := range items {
-				if time.Since(item.UpdateTime) < conf.RegisterValidity {
-					item.Status = "RECOVER"
-					item.Logger = GB28181Plugin.With(zap.String("id", item.ID))
-					Devices.Store(item.ID, item)
-				}
+				//if channelList, ok := deviceChannel[item.ID]; ok {
+				//	for _, c := range channelList {
+				//		item.channelMap.Store(c.DeviceID, c)
+				//	}
+				//}
+				GB28181Plugin.Debug("channel list")
+				item.channelMap.Range(func(key, value any) bool {
+					GB28181Plugin.Debug("channel", zap.Any(key.(string), value))
+					return true
+				})
+				// 从本地json文件中加载自动添加过的设备
+				item.Online = false
+				item.Status = DeviceOfflineStatus
+				item.Logger = GB28181Plugin.With(zap.String("id", item.ID))
+				Devices.Store(item.ID, item)
+				//if time.Since(item.UpdateTime) < conf.RegisterValidity {
+				//	item.Status = "RECOVER"
+				//	item.Logger = GB28181Plugin.With(zap.String("id", item.ID))
+				//	Devices.Store(item.ID, item)
+				//}
 			}
+
+			GB28181Plugin.Debug("test3")
+		} else {
+			GB28181Plugin.Error(err.Error())
 		}
 	}
 }
@@ -230,6 +305,7 @@ func (d *Device) addOrUpdateChannel(info ChannelInfo) (c *Channel) {
 			c.LiveSubSP = ""
 		}
 		d.channelMap.Store(info.DeviceID, c)
+
 	}
 	return
 }

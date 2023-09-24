@@ -62,7 +62,7 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 
 	GB28181Plugin.Debug("SIP<-OnMessage", zap.String("id", id), zap.String("source", req.Source()), zap.String("req", req.String()))
 
-	isUnregister := false // false: 表示未注册,true: 已注册
+	isUnregister := false // false: 表示已经注册过,true: 未注册
 	if exps := req.GetHeaders("Expires"); len(exps) > 0 {
 		exp := exps[0]
 		expSec, err := strconv.ParseInt(exp.Value(), 10, 32)
@@ -140,11 +140,12 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 				return
 			}
 		} else {
-			//
+			// 在本地json文件中已存在
 			if v, ok := Devices.Load(id); ok {
 				d = v.(*Device)
 				c.RecoverDevice(d, req)
 			} else {
+				// 未添加到本地的json文件中
 				d = c.StoreDevice(id, req)
 			}
 		}
@@ -260,6 +261,7 @@ func (c *GB28181Config) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 			}
 		case "Catalog":
 			d.UpdateChannels(temp.DeviceList...)
+			c.SaveDevices()
 		case "RecordInfo":
 			RecordQueryLink.Put(d.ID, temp.DeviceID, temp.SN, temp.SumNum, temp.RecordList)
 		case "DeviceInfo":

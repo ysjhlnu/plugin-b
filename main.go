@@ -80,7 +80,6 @@ func (c *GB28181Config) initRoutes() {
 func (c *GB28181Config) OnEvent(event any) {
 
 	GB28181Plugin.Debug(c.MysqlHost)
-
 	switch e := event.(type) {
 	case FirstConfig:
 		if c.Port.Sip != "udp:5060" {
