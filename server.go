@@ -1,8 +1,16 @@
-package b
+package gb28181
 
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/logrusorgru/aurora"
+	"go.uber.org/zap"
+	"m7s.live/plugin/gb28181/v4/utils"
+
 	"github.com/ghettovoice/gosip"
 	"github.com/ghettovoice/gosip/log"
 	"github.com/ghettovoice/gosip/sip"
@@ -116,8 +124,8 @@ func RequestForResponse(transport string, request sip.Request,
 func (c *BConfig) startServer() {
 	addr := c.ListenAddr + ":" + strconv.Itoa(int(c.SipPort))
 
-	logger := utils.NewZapLogger(BPlugin.Logger, "GB SIP Server", nil)
-	logger.SetLevel(levelMap[c.LogLevel])
+	logger := utils.NewZapLogger(GB28181Plugin.Logger, "GB SIP Server", nil)
+	logger.SetLevel(uint32(levelMap[c.LogLevel]))
 	// logger := log.NewDefaultLogrusLogger().WithPrefix("GB SIP Server")
 	srvConf := gosip.ServerConfig{}
 	if c.SipIP != "" {
@@ -159,7 +167,7 @@ func (c *BConfig) startServer() {
 // }
 
 // 定时任务
-func (c *BConfig) startJob() {
+func (c *GB28181Config) startJob() {
 	statusTick := time.NewTicker(c.HeartbeatInterval / 2)
 	banTick := time.NewTicker(c.RemoveBanInterval)
 	linkTick := time.NewTicker(time.Millisecond * 100)

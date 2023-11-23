@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 
 	"github.com/ghettovoice/gosip/sip"
+	"github.com/goccy/go-json"
 	"go.uber.org/zap"
 	. "m7s.live/engine/v4"
 	"m7s.live/engine/v4/log"
@@ -113,11 +114,36 @@ type Channel struct {
 	device      *Device      // 所属设备
 	status      atomic.Int32 // 通道状态,0:空闲,1:正在invite,2:正在播放
 	LiveSubSP   string       // 实时子码流，通过rtsp
-	GpsTime     time.Time    //gps时间
-	Longitude   string       //经度
-	Latitude    string       //纬度
+	GpsTime     time.Time    // gps时间
+	Longitude   string       // 经度
+	Latitude    string       // 纬度
 	*log.Logger `json:"-" yaml:"-"`
 	ChannelInfo
+}
+
+func (c *Channel) MarshalJSON() ([]byte, error) {
+	m := map[string]any{
+		"DeviceID":     c.DeviceID,
+		"ParentID":     c.ParentID,
+		"Name":         c.Name,
+		"Manufacturer": c.Manufacturer,
+		"Model":        c.Model,
+		"Owner":        c.Owner,
+		"CivilCode":    c.CivilCode,
+		"Address":      c.Address,
+		"Port":         c.Port,
+		"Parental":     c.Parental,
+		"SafetyWay":    c.SafetyWay,
+		"RegisterWay":  c.RegisterWay,
+		"Secrecy":      c.Secrecy,
+		"Status":       c.Status,
+		"Longitude":    c.Longitude,
+		"Latitude":     c.Latitude,
+		"GpsTime":      c.GpsTime,
+		"LiveSubSP":    c.LiveSubSP,
+		"LiveStatus":   c.status.Load(),
+	}
+	return json.Marshal(m)
 }
 
 // Channel 通道
@@ -540,7 +566,9 @@ func (channel *Channel) PlayForward(streamPath string, speed float32) int {
 }
 
 func (channel *Channel) TryAutoInvite(opt *InviteOptions) {
-	if channel.CanInvite() {
+	condition := !opt.IsLive() || channel.CanInvite()
+	channel.Debug("TryAutoInvite", zap.Any("opt", opt), zap.Bool("condition", condition))
+	if condition {
 		go channel.Invite(opt)
 	}
 }
