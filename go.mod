@@ -1,4 +1,4 @@
-module m7s.live/plugin/gb28181/v4
+module plugin-b
 
 go 1.19
 
@@ -6,13 +6,13 @@ require (
 	github.com/ghettovoice/gosip v0.0.0-20230903092020-b059959586db
 	github.com/goccy/go-json v0.10.2
 	github.com/husanpao/ip v0.0.0-20220711082147-73160bb611a8
-	github.com/logrusorgru/aurora/v4 v4.0.0
+	github.com/logrusorgru/aurora v2.0.3+incompatible
 	github.com/pion/rtp v1.8.1
 	go.uber.org/zap v1.26.0
 	golang.org/x/net v0.15.0
 	golang.org/x/text v0.13.0
 	m7s.live/engine/v4 v4.13.12
-	m7s.live/plugin/ps/v4 v4.1.2
+	m7s.live/plugin/ps/v4 v4.1.3
 )
 
 require (
