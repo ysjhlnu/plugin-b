@@ -117,7 +117,7 @@ func RequestForResponse(transport string, request sip.Request,
 func (c *BConfig) startServer() {
 	addr := c.ListenAddr + ":" + strconv.Itoa(int(c.SipPort))
 
-	logger := utils.NewZapLogger(GB28181Plugin.Logger, "GB SIP Server", nil)
+	logger := utils.NewZapLogger(BPlugin.Logger, "GB SIP Server", nil)
 	logger.SetLevel(uint32(levelMap[c.LogLevel]))
 	// logger := log.NewDefaultLogrusLogger().WithPrefix("GB SIP Server")
 	srvConf := gosip.ServerConfig{}
@@ -160,7 +160,7 @@ func (c *BConfig) startServer() {
 // }
 
 // 定时任务
-func (c *GB28181Config) startJob() {
+func (c *BConfig) startJob() {
 	statusTick := time.NewTicker(c.HeartbeatInterval / 2)
 	banTick := time.NewTicker(c.RemoveBanInterval)
 	linkTick := time.NewTicker(time.Millisecond * 100)
