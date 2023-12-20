@@ -5,10 +5,11 @@ import (
 	"crypto/md5"
 	"encoding/xml"
 	"fmt"
+	"m7s.live/plugin/gb281812022/model"
 	"strconv"
 
 	"go.uber.org/zap"
-	"m7s.live/plugin/gb28181/v4/utils"
+	"m7s.live/plugin/gb281812022/utils"
 
 	"github.com/ghettovoice/gosip/sip"
 
@@ -52,7 +53,7 @@ func (a *Authorization) getDigest(raw string) string {
 	}
 }
 
-func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
+func (c *GB281812022Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 	from, ok := req.From()
 	if !ok || from.Address == nil {
 		GB28181Plugin.Error("OnRegister", zap.String("error", "no from"))
@@ -62,7 +63,7 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 
 	GB28181Plugin.Debug("SIP<-OnMessage", zap.String("id", id), zap.String("source", req.Source()), zap.String("req", req.String()))
 
-	isUnregister := false // false: 表示已经注册过,true: 未注册
+	isUnregister := false // false: 表示已经注册过,true: 未注册或者注销
 	if exps := req.GetHeaders("Expires"); len(exps) > 0 {
 		exp := exps[0]
 		expSec, err := strconv.ParseInt(exp.Value(), 10, 32)
@@ -134,8 +135,18 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 		if isUnregister {
 			tmpd, ok := Devices.LoadAndDelete(id)
 			if ok {
-				GB28181Plugin.Info("Unregister Device", zap.String("id", id))
+				if err := model.UpdateDeviceStatus(GB28181Plugin.DB, GB28181Plugin.Name, id, DeviceOfflineStatus, false); err != nil {
+					GB28181Plugin.Warn("设备注销 DB error", zap.String("id", id))
+				}
+				GB28181Plugin.Info("设备注销", zap.String("id", id))
 				d = tmpd.(*Device)
+				d.channelMap.Range(func(key, value any) bool {
+					ch := value.(*Channel)
+					if err := model.UpdateDeviceChannelStatus(GB28181Plugin.DB, GB28181Plugin.Name, d.ID, ch.DeviceID, ChannelOffStatus); err != nil {
+						GB28181Plugin.Error(err.Error())
+					}
+					return true
+				})
 			} else {
 				return
 			}
@@ -144,7 +155,9 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 			if v, ok := Devices.Load(id); ok {
 				d = v.(*Device)
 				c.RecoverDevice(d, req)
+
 			} else {
+
 				// 未添加到本地的json文件中
 				d = c.StoreDevice(id, req)
 			}
@@ -193,19 +206,20 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 func (d *Device) syncChannels() {
 	if time.Since(d.lastSyncTime) > 2*conf.HeartbeatInterval {
 		d.lastSyncTime = time.Now()
-		d.Catalog() // 查询通道
+		d.Catalog()
 		d.Subscribe()
 		d.QueryDeviceInfo()
 	}
 }
 
-func (c *GB28181Config) OnMessage(req sip.Request, tx sip.ServerTransaction) {
+func (c *GB281812022Config) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 	from, ok := req.From()
 	if !ok || from.Address == nil {
 		GB28181Plugin.Error("OnMessage", zap.String("error", "no from"))
 		return
 	}
 	id := from.Address.User().String()
+
 	GB28181Plugin.Debug("SIP<-OnMessage", zap.String("id", id), zap.String("source", req.Source()), zap.String("req", req.String()))
 	if v, ok := Devices.Load(id); ok {
 		d := v.(*Device)
@@ -216,12 +230,16 @@ func (c *GB28181Config) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 		case DeviceRegisterStatus:
 			d.Status = DeviceOnlineStatus
 		}
+
 		d.UpdateTime = time.Now()
+		if err := model.UpdateDeviceStatus(GB28181Plugin.DB, GB28181Plugin.Name, id, string(d.Status), true); err != nil {
+			GB28181Plugin.Sugar().Errorf("DB error: %v", err)
+		}
 		temp := &struct {
 			XMLName      xml.Name
-			CmdType      string
-			SN           int // 请求序列号，一般用于对应 request 和 response
-			DeviceID     string
+			CmdType      string // 命令类型
+			SN           int    // 请求序列号，一般用于对应 request 和 response
+			DeviceID     string // 下级设备 ID
 			DeviceName   string
 			Manufacturer string
 			Model        string
@@ -242,6 +260,7 @@ func (c *GB28181Config) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 		var body string
 		switch temp.CmdType {
 		case "Keepalive":
+			GB28181Plugin.Debug("心跳保持", zap.String("id", id))
 			d.LastKeepaliveAt = time.Now()
 			//callID !="" 说明是订阅的事件类型信息
 			if d.lastSyncTime.IsZero() {
@@ -259,9 +278,12 @@ func (c *GB28181Config) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 				d.MobilePositionSubscribe(d.ID, c.Position.Expires, c.Position.Interval)
 				GB28181Plugin.Debug("Mobile Position Subscribe", zap.String("deviceID", d.ID))
 			}
-		case "Catalog":
+			if err := model.UpdateDeviceKeepalive(GB28181Plugin.DB, GB28181Plugin.Name, d.ID); err != nil {
+				d.Sugar().Errorf("DB error:%v", err)
+			}
+		case "Catalog": // 目录查询
 			d.UpdateChannels(temp.DeviceList...)
-			c.SaveDevices()
+			//c.SaveDevices()
 		case "RecordInfo":
 			RecordQueryLink.Put(d.ID, temp.DeviceID, temp.SN, temp.SumNum, temp.RecordList)
 		case "DeviceInfo":
@@ -269,6 +291,9 @@ func (c *GB28181Config) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 			d.Name = temp.DeviceName
 			d.Manufacturer = temp.Manufacturer
 			d.Model = temp.Model
+			if err := model.UpdateDeviceInfo(GB28181Plugin.DB, GB28181Plugin.Name, d.ID, temp.DeviceName, temp.Manufacturer, temp.Model); err != nil {
+				d.Sugar().Errorf("DB error: %v", err)
+			}
 		case "Alarm":
 			d.Status = DeviceAlarmedStatus
 			body = BuildAlarmResponseXML(d.ID)
@@ -284,12 +309,12 @@ func (c *GB28181Config) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 		GB28181Plugin.Debug("Unauthorized message, device not found", zap.String("id", id))
 	}
 }
-func (c *GB28181Config) OnBye(req sip.Request, tx sip.ServerTransaction) {
+func (c *GB281812022Config) OnBye(req sip.Request, tx sip.ServerTransaction) {
 	tx.Respond(sip.NewResponseFromRequest("", req, http.StatusOK, "OK", ""))
 }
 
 // OnNotify 订阅通知处理
-func (c *GB28181Config) OnNotify(req sip.Request, tx sip.ServerTransaction) {
+func (c *GB281812022Config) OnNotify(req sip.Request, tx sip.ServerTransaction) {
 	from, ok := req.From()
 	if !ok || from.Address == nil {
 		GB28181Plugin.Error("OnNotify", zap.String("error", "no from"))
@@ -306,10 +331,12 @@ func (c *GB28181Config) OnNotify(req sip.Request, tx sip.ServerTransaction) {
 			Time      string //位置订阅-GPS时间
 			Longitude string //位置订阅-经度
 			Latitude  string //位置订阅-维度
+			SessionID string // 会话ID
 			// Speed      string           //位置订阅-速度(km/h)(可选)
 			// Direction  string           //位置订阅-方向(取值为当前摄像头方向与正北方的顺时针夹角,取值范围0°~360°,单位:°)(可选)
 			// Altitude   string           //位置订阅-海拔高度,单位:m(可选)
-			DeviceList []*notifyMessage `xml:"DeviceList>Item"` //目录订阅
+			DeviceList   []*notifyMessage `xml:"DeviceList>Item"` //目录订阅
+			SnapShotList []snapshotFile   `xml:"SnapShotList"`    // 设备图像抓拍完成
 		}{}
 		decoder := xml.NewDecoder(bytes.NewReader([]byte(req.Body())))
 		decoder.CharsetReader = charset.NewReaderLabel
@@ -330,6 +357,9 @@ func (c *GB28181Config) OnNotify(req sip.Request, tx sip.ServerTransaction) {
 			d.UpdateChannelPosition(temp.DeviceID, temp.Time, temp.Longitude, temp.Latitude)
 		// case "Alarm":
 		// 	//报警事件通知 TODO
+		case "UploadSnapShotFinished":
+			d.ImageCapture(temp.SnapShotList)
+
 		default:
 			d.Warn("Not supported CmdType", zap.String("CmdType", temp.CmdType), zap.String("body", req.Body()))
 			response := sip.NewResponseFromRequest("", req, http.StatusBadRequest, "", "")
@@ -358,4 +388,8 @@ type notifyMessage struct {
 	Status       string
 	//状态改变事件 ON:上线,OFF:离线,VLOST:视频丢失,DEFECT:故障,ADD:增加,DEL:删除,UPDATE:更新(必选)
 	Event string
+}
+
+type snapshotFile struct {
+	SnapshotFileID string
 }

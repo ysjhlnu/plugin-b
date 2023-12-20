@@ -42,6 +42,22 @@ var (
 <DeviceID>%s</DeviceID>
 <Interval>%d</Interval>
 </Query>`
+
+	// ImageCaptureConfigXML 图像抓拍配置
+	ImageCaptureConfigXML = `
+	<?xml version="1.0"?>
+	<Control>
+		<CmdType>DeviceConfig</CmdType>
+		<SN>%d</SN>
+		<DeviceID>%s</DeviceID>
+		<SnapShotConfig>
+			<SnapNum>%d</SnapNum>
+			<Interval>%d</Interval>
+			<UploadURL>%s</UploadURL>
+			<SessionID>%s</SessionID>
+		</SnapShotConfig>
+	</Control>
+`
 )
 
 func intTotime(t int64) time.Time {
@@ -89,4 +105,9 @@ var (
 // BuildRecordInfoXML 获取录像文件列表指令
 func BuildAlarmResponseXML(id string) string {
 	return fmt.Sprintf(AlarmResponseXML, id)
+}
+
+// BuildImageCaptureConfig 图像抓拍配置
+func BuildImageCaptureConfig(sn, snapNum, interval int, id, url, sessionID string) string {
+	return fmt.Sprintf(ImageCaptureConfigXML, sn, id, snapNum, interval, url, sessionID)
 }

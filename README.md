@@ -1,4 +1,4 @@
-# GB28181插件 2016版本协议
+# GB28181插件 2022版本协议
 
 该插件提供SIP server的服务，以及流媒体服务器能力，可以将NVR和摄像头的流抓到m7s中，可获取的设备的录像数据以及访问录像视频。也可以控制摄像头的旋转、缩放等。
 
@@ -10,7 +10,7 @@ github.com/Monibuca/plugin-gb28181
 
 ```go
 import (
-_ "m7s.live/plugin/gb28181/v4"
+_ "m7s.live/plugin/gb281812022"
 )
 ```
 

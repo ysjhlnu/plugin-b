@@ -14,7 +14,7 @@ var (
 	playScaleValues = map[float32]bool{0.25: true, 0.5: true, 1: true, 2: true, 4: true}
 )
 
-func (c *GB28181Config) API_list(w http.ResponseWriter, r *http.Request) {
+func (c *GB281812022Config) API_list(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	if query.Get("interval") == "" {
 		query.Set("interval", "5s")
@@ -29,7 +29,7 @@ func (c *GB28181Config) API_list(w http.ResponseWriter, r *http.Request) {
 	}, w, r)
 }
 
-func (c *GB28181Config) API_records(w http.ResponseWriter, r *http.Request) {
+func (c *GB281812022Config) API_records(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	id := query.Get("id")
 	channel := query.Get("channel")
@@ -52,7 +52,7 @@ func (c *GB28181Config) API_records(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (c *GB28181Config) API_control(w http.ResponseWriter, r *http.Request) {
+func (c *GB281812022Config) API_control(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	channel := r.URL.Query().Get("channel")
 	ptzcmd := r.URL.Query().Get("ptzcmd")
@@ -63,7 +63,7 @@ func (c *GB28181Config) API_control(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (c *GB28181Config) API_ptz(w http.ResponseWriter, r *http.Request) {
+func (c *GB281812022Config) API_ptz(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	id := q.Get("id")
 	channel := q.Get("channel")
@@ -101,7 +101,7 @@ func (c *GB28181Config) API_ptz(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (c *GB28181Config) API_invite(w http.ResponseWriter, r *http.Request) {
+func (c *GB281812022Config) API_invite(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	id := query.Get("id")
 	channel := query.Get("channel")
@@ -135,7 +135,7 @@ func (c *GB28181Config) API_invite(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (c *GB28181Config) API_bye(w http.ResponseWriter, r *http.Request) {
+func (c *GB281812022Config) API_bye(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	channel := r.URL.Query().Get("channel")
 	streamPath := r.URL.Query().Get("streamPath")
@@ -146,7 +146,7 @@ func (c *GB28181Config) API_bye(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (c *GB28181Config) API_play_pause(w http.ResponseWriter, r *http.Request) {
+func (c *GB281812022Config) API_play_pause(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	channel := r.URL.Query().Get("channel")
 	streamPath := r.URL.Query().Get("streamPath")
@@ -157,7 +157,7 @@ func (c *GB28181Config) API_play_pause(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (c *GB28181Config) API_play_resume(w http.ResponseWriter, r *http.Request) {
+func (c *GB281812022Config) API_play_resume(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	channel := r.URL.Query().Get("channel")
 	streamPath := r.URL.Query().Get("streamPath")
@@ -168,7 +168,7 @@ func (c *GB28181Config) API_play_resume(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-func (c *GB28181Config) API_play_seek(w http.ResponseWriter, r *http.Request) {
+func (c *GB281812022Config) API_play_seek(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	channel := r.URL.Query().Get("channel")
 	streamPath := r.URL.Query().Get("streamPath")
@@ -185,7 +185,7 @@ func (c *GB28181Config) API_play_seek(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (c *GB28181Config) API_play_forward(w http.ResponseWriter, r *http.Request) {
+func (c *GB281812022Config) API_play_forward(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	channel := r.URL.Query().Get("channel")
 	streamPath := r.URL.Query().Get("streamPath")
@@ -203,7 +203,7 @@ func (c *GB28181Config) API_play_forward(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-func (c *GB28181Config) API_position(w http.ResponseWriter, r *http.Request) {
+func (c *GB281812022Config) API_position(w http.ResponseWriter, r *http.Request) {
 	//CORS(w, r)
 	query := r.URL.Query()
 	//设备id
@@ -237,7 +237,7 @@ type DevicePosition struct {
 	Latitude  string    //纬度
 }
 
-func (c *GB28181Config) API_get_position(w http.ResponseWriter, r *http.Request) {
+func (c *GB281812022Config) API_get_position(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	//设备id
 	id := query.Get("id")
@@ -259,4 +259,26 @@ func (c *GB28181Config) API_get_position(w http.ResponseWriter, r *http.Request)
 		}
 		return
 	}, w, r)
+}
+
+// API_snapshot 图像抓拍
+func (c *GB281812022Config) API_snapshot(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	id := query.Get("id")
+	channel := query.Get("channel")
+	val, ok := Devices.Load(id)
+	if !ok {
+		util.ReturnError(util.APIErrorNotFound, fmt.Sprintf("device %q not found", id), w, r)
+		return
+	}
+	d, okd := val.(*Device)
+	if !okd {
+		util.ReturnError(util.APIErrorNotFound, fmt.Sprintf("device %q  assert error", id), w, r)
+		return
+	}
+	if err := ImageCaptureConfig(d, channel); err != nil {
+		util.ReturnOK(w, r)
+	} else {
+		util.ReturnError(util.APIErrorNotFound, err.Error(), w, r)
+	}
 }
