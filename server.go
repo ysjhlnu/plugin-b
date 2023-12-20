@@ -3,6 +3,7 @@ package gb28181
 import (
 	"context"
 	"fmt"
+	"m7s.live/plugin/gb28181/v4/model"
 	"strconv"
 	"strings"
 	"time"
@@ -197,26 +198,34 @@ func (c *GB28181Config) statusCheck() {
 	Devices.Range(func(key, value any) bool {
 		d := value.(*Device)
 		if time.Since(d.UpdateTime) > c.RegisterValidity {
-			GB28181Plugin.Info("Device register timeout,从设备管理中离线该设备")
 			if d, ok := Devices.Load(key); ok {
 				if dev, devOk := d.(*Device); devOk {
 					dev.Online = false
 					dev.Status = DeviceOfflineStatus
+					if err := model.UpdateDeviceStatus(GB28181Plugin.DB, GB28181Plugin.Name, dev.ID, string(dev.Status), false); err != nil {
+						GB28181Plugin.Error(err.Error())
+					}
 				}
 			}
 			//Devices.Delete(key)
-			//GB28181Plugin.Info("Device register timeout,从设备管理中删除该设备",
-			//	zap.String("id", d.ID),
-			//	zap.Time("registerTime", d.RegisterTime),
-			//	zap.Time("updateTime", d.UpdateTime),
-			//)
+			GB28181Plugin.Info("Device register timeout,从设备管理中离线该设备",
+				zap.String("id", d.ID),
+				zap.Time("registerTime", d.RegisterTime),
+				zap.Time("updateTime", d.UpdateTime),
+			)
 		} else if time.Since(d.UpdateTime) > c.HeartbeatInterval*3 {
 			d.Online = false
 			d.Status = DeviceOfflineStatus
+			if err := model.UpdateDeviceStatus(GB28181Plugin.DB, GB28181Plugin.Name, d.ID, string(d.Status), false); err != nil {
+				GB28181Plugin.Error(err.Error())
+			}
 			d.channelMap.Range(func(key, value any) bool {
 				ch := value.(*Channel)
 				ch.Online = false
 				ch.Status = ChannelOffStatus
+				if err := model.UpdateDeviceChannelStatus(GB28181Plugin.DB, GB28181Plugin.Name, d.ID, ch.DeviceID, string(ch.Status)); err != nil {
+					GB28181Plugin.Error(err.Error())
+				}
 				return true
 			})
 			GB28181Plugin.Info("Device offline", zap.String("id", d.ID), zap.Time("updateTime", d.UpdateTime))

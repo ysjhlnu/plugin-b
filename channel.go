@@ -148,21 +148,21 @@ func (c *Channel) MarshalJSON() ([]byte, error) {
 
 // Channel 通道
 type ChannelInfo struct {
-	DeviceID     string // 通道ID
-	ParentID     string
-	Name         string
-	Manufacturer string
-	Model        string
-	Owner        string
-	CivilCode    string
-	Address      string
+	DeviceID     string // 设备/区域/系统编码,如果 11-13 是 132则为摄像机），216 可以看出是通过虚拟分组推送的
+	ParentID     string // 父设备/区域/系统 ID（ 可必选，有父设备需要填写）
+	Name         string // 设备名称
+	Manufacturer string // 厂商
+	Model        string // 型号
+	Owner        string // 设备归属
+	CivilCode    string // 行政区划编码
+	Address      string // 设备安装地址，国标没具体说，应该是前端配置的 IP 地址
 	Port         int
-	Parental     int
-	SafetyWay    int
-	RegisterWay  int
-	Secrecy      int
+	Parental     int // 当为设备时，是否有子设备（必选） 1 有， 0 没有
+	SafetyWay    int // 信令安全模式（可选）缺省为 0； 0：不采用； 2： S/MIME 签名方式； 3：S/MIME 加密签名同时采用方式； 4：数字摘要方式
+	RegisterWay  int // 注册方式（必选）缺省为 1； 1： 符合 sip3261 标准的认证注册模式； 2：基于口令的双向认证注册模式； 3： 基于数字证书的双向认证注册模式
+	Secrecy      int // 保密属性（必选）缺省为 0； 0：不涉密， 1：涉密
 	Online       bool
-	Status       ChannelStatus
+	Status       ChannelStatus // 设备状态
 }
 
 type ChannelStatus string

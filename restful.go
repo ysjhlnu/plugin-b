@@ -29,6 +29,7 @@ func (c *GB28181Config) API_list(w http.ResponseWriter, r *http.Request) {
 	}, w, r)
 }
 
+// API_records 查询录像
 func (c *GB28181Config) API_records(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	id := query.Get("id")
@@ -52,6 +53,7 @@ func (c *GB28181Config) API_records(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// API_control 设备控制
 func (c *GB28181Config) API_control(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	channel := r.URL.Query().Get("channel")
@@ -63,6 +65,7 @@ func (c *GB28181Config) API_control(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// API_ptz 球机/云台控制
 func (c *GB28181Config) API_ptz(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	id := q.Get("id")
@@ -101,6 +104,7 @@ func (c *GB28181Config) API_ptz(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// API_invite 从设备拉取视频流
 func (c *GB28181Config) API_invite(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	id := query.Get("id")
@@ -135,6 +139,7 @@ func (c *GB28181Config) API_invite(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// API_bye 停止拉流
 func (c *GB28181Config) API_bye(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	channel := r.URL.Query().Get("channel")
@@ -146,6 +151,7 @@ func (c *GB28181Config) API_bye(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// API_play_pause 暂停播放
 func (c *GB28181Config) API_play_pause(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	channel := r.URL.Query().Get("channel")
@@ -157,6 +163,7 @@ func (c *GB28181Config) API_play_pause(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// API_play_resume 恢复播放
 func (c *GB28181Config) API_play_resume(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	channel := r.URL.Query().Get("channel")
@@ -168,6 +175,7 @@ func (c *GB28181Config) API_play_resume(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+// API_play_seek 跳转到播放时间
 func (c *GB28181Config) API_play_seek(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	channel := r.URL.Query().Get("channel")
@@ -185,6 +193,7 @@ func (c *GB28181Config) API_play_seek(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// API_play_forward 快进/快退播放
 func (c *GB28181Config) API_play_forward(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	channel := r.URL.Query().Get("channel")
@@ -203,6 +212,7 @@ func (c *GB28181Config) API_play_forward(w http.ResponseWriter, r *http.Request)
 	}
 }
 
+// API_position 移动位置订阅
 func (c *GB28181Config) API_position(w http.ResponseWriter, r *http.Request) {
 	//CORS(w, r)
 	query := r.URL.Query()
@@ -242,7 +252,7 @@ func (c *GB28181Config) API_get_position(w http.ResponseWriter, r *http.Request)
 	//设备id
 	id := query.Get("id")
 	if query.Get("interval") == "" {
-		query.Set("interval", fmt.Sprintf("%ds", c.Position.Interval.Seconds()))
+		query.Set("interval", fmt.Sprintf("%fs", c.Position.Interval.Seconds()))
 	}
 	util.ReturnFetchValue(func() (list []*DevicePosition) {
 		if id == "" {
@@ -259,4 +269,22 @@ func (c *GB28181Config) API_get_position(w http.ResponseWriter, r *http.Request)
 		}
 		return
 	}, w, r)
+}
+
+// test
+
+func (c *GB28181Config) API_switch(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	d := query.Get("deny")
+	if d != "" {
+		GB28181Plugin.Debug("get")
+		if d == "true" {
+			GB28181Plugin.Debug("true")
+			Cache.Store("deny", true)
+		} else if d == "false" {
+			GB28181Plugin.Debug("false")
+			Cache.Store("deny", false)
+		}
+	}
+	util.ReturnOK(w, r)
 }

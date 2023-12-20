@@ -12,6 +12,12 @@ import (
 	"m7s.live/engine/v4/util"
 )
 
+var Cache sync.Map
+
+func init() {
+	Cache = sync.Map{}
+}
+
 type GB28181PositionConfig struct {
 	AutosubPosition bool          //是否自动订阅定位
 	Expires         time.Duration `default:"3600s"` //订阅周期(单位：秒)
@@ -19,12 +25,9 @@ type GB28181PositionConfig struct {
 }
 
 type GB28181Config struct {
-	MysqlHost     string // mysql 地址
-	MysqlUser     string // mysql 用户名
-	MysqlPassword string // mysql 密码
-	InviteMode    int    `default:"1"` //邀请模式，0:手动拉流，1:预拉流，2:按需拉流
-	InviteIDs     string //按照国标gb28181协议允许邀请的设备类型:132 摄像机 NVR
-	ListenAddr    string `default:"0.0.0.0"`
+	InviteMode int    `default:"0"` //邀请模式，0:手动拉流，1:预拉流，2:按需拉流
+	InviteIDs  string //按照国标gb28181协议允许邀请的设备类型:132 摄像机 NVR
+	ListenAddr string `default:"0.0.0.0"`
 	//sip服务器的配置
 	SipNetwork string   `default:"udp"` //传输协议，默认UDP，可选TCP
 	SipIP      string   //sip 服务器公网IP
@@ -79,7 +82,6 @@ func (c *GB28181Config) initRoutes() {
 
 func (c *GB28181Config) OnEvent(event any) {
 
-	GB28181Plugin.Debug(c.MysqlHost)
 	switch e := event.(type) {
 	case FirstConfig:
 		if c.Port.Sip != "udp:5060" {

@@ -1,0 +1,16 @@
+panic: runtime error: index out of range [0] with length 0 [recovered]
+	panic: runtime error: index out of range [0] with length 0
+
+goroutine 19 [running]:
+testing.tRunner.func1.2({0x7287c0, 0xc0000d0cc0})
+	/usr/local/go/src/testing/testing.go:1526 +0x24e
+testing.tRunner.func1()
+	/usr/local/go/src/testing/testing.go:1529 +0x39f
+panic({0x7287c0, 0xc0000d0cc0})
+	/usr/local/go/src/runtime/panic.go:884 +0x213
+m7s.live/plugin/gb28181/v4.TestDecodeXML(0xc0002b81a0)
+	/home/cqset/code/go/src/github.com/ysjhlnu/self_monibuca/plugin-gb28181/handle_test.go:63 +0x278
+testing.tRunner(0xc0002b81a0, 0x787ef0)
+	/usr/local/go/src/testing/testing.go:1576 +0x10b
+created by testing.(*T).Run
+	/usr/local/go/src/testing/testing.go:1629 +0x3ea
