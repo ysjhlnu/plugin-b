@@ -5,10 +5,12 @@ import (
 	"crypto/md5"
 	"encoding/xml"
 	"fmt"
+	"log"
+	"m7s.live/plugin/b/model"
 	"strconv"
 
 	"go.uber.org/zap"
-	"plugin-b/utils"
+	"m7s.live/plugin/b/utils"
 
 	"github.com/ghettovoice/gosip/sip"
 
@@ -38,9 +40,29 @@ func (a *Authorization) Verify(username, passwd, realm, nonce string) bool {
 	//3、将密文 1，nonce 和密文 2 依次组合获取 1 个字符串，并对这个字符串使用算法加密，获得密文 r3，即Response
 	s3 := fmt.Sprintf("%s:%s:%s", r1, nonce, r2)
 	r3 := a.getDigest(s3)
-
 	//4、计算服务端和客户端上报的是否相等
 	return r3 == a.Response()
+}
+
+func (a *Authorization) VerifyStr(username, passwd, realm, nonce string) string {
+
+	//1、将 username,realm,password 依次组合获取 1 个字符串，并用算法加密的到密文 r1
+	s1 := fmt.Sprintf("%s:%s:%s", username, realm, passwd)
+	r1 := a.getDigest(s1)
+	//2、将 method，即REGISTER ,uri 依次组合获取 1 个字符串，并对这个字符串使用算法 加密得到密文 r2
+	s2 := fmt.Sprintf("REGISTER:%s", a.Uri())
+	r2 := a.getDigest(s2)
+
+	if r1 == "" || r2 == "" {
+		BPlugin.Error("Authorization algorithm wrong")
+		return ""
+	}
+	//3、将密文 1，nonce 和密文 2 依次组合获取 1 个字符串，并对这个字符串使用算法加密，获得密文 r3，即Response
+	s3 := fmt.Sprintf("%s:%s:%s", r1, nonce, r2)
+	r3 := a.getDigest(s3)
+	log.Printf("md5: %s", r3)
+	//4、计算服务端和客户端上报的是否相等
+	return r3
 }
 
 func (a *Authorization) getDigest(raw string) string {
@@ -62,7 +84,7 @@ func (c *BConfig) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 
 	BPlugin.Debug("SIP<-OnMessage", zap.String("id", id), zap.String("source", req.Source()), zap.String("req", req.String()))
 
-	isUnregister := false
+	isUnregister := false // true: 注销 false: 注册
 	if exps := req.GetHeaders("Expires"); len(exps) > 0 {
 		exp := exps[0]
 		expSec, err := strconv.ParseInt(exp.Value(), 10, 32)
@@ -105,7 +127,6 @@ func (c *BConfig) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 		if hdrs := req.GetHeaders("Authorization"); len(hdrs) > 0 {
 			authenticateHeader := hdrs[0].(*sip.GenericHeader)
 			auth := &Authorization{sip.AuthFromValue(authenticateHeader.Contents)}
-
 			// 有些摄像头没有配置用户名的地方，用户名就是摄像头自己的国标id
 			var username string
 			if auth.Username() == id {
@@ -115,12 +136,23 @@ func (c *BConfig) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 			}
 
 			if dc, ok := DeviceRegisterCount.LoadOrStore(id, 1); ok && dc.(int) > MaxRegisterCount {
+				BPlugin.Sugar().Warnf("%s--注册超过3次", id)
 				response := sip.NewResponseFromRequest("", req, http.StatusForbidden, "Forbidden", "")
 				tx.Respond(response)
 				return
 			} else {
 				// 设备第二次上报，校验
+				BPlugin.Debug("设备第二次上报，校验")
 				_nonce, loaded := DeviceNonce.Load(id)
+				if _nonce == nil {
+					BPlugin.Sugar().Warnf("%s--平台删除改Nonce", id)
+					response := sip.NewResponseFromRequest("", req, http.StatusInternalServerError, "Forbidden", "")
+					tx.Respond(response)
+					return
+				}
+				BPlugin.Sugar().Debugf("nonce: %v,load: %v", _nonce, loaded)
+				BPlugin.Sugar().Debugf("verify: %v", auth.Verify(username, c.Password, c.Realm, _nonce.(string)))
+				BPlugin.Sugar().Debugf("verify: %v", auth.VerifyStr(username, c.Password, c.Realm, _nonce.(string)))
 				if loaded && auth.Verify(username, c.Password, c.Realm, _nonce.(string)) {
 					passAuth = true
 				} else {
@@ -131,13 +163,26 @@ func (c *BConfig) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 	}
 	if passAuth {
 		// 通过校验
-		BPlugin.Info("密码校验通过")
+		BPlugin.Debug("密码校验通过")
 		var d *Device
 		if isUnregister {
+			// 执行注销流程
 			tmpd, ok := Devices.LoadAndDelete(id)
 			if ok {
 				BPlugin.Info("Unregister Device", zap.String("id", id))
 				d = tmpd.(*Device)
+				if err := model.UpdateDeviceStatus(BPlugin.DB, BPlugin.Name, id, DeviceOfflineStatus, false); err != nil {
+					BPlugin.Error("B-interface DB error", zap.Any("error", err))
+				}
+				d.channelMap.Range(func(key, value any) bool {
+					ch := value.(*Channel)
+					ch.Online = false
+					ch.Status = ChannelOffStatus
+					if err := model.UpdateDeviceChannelStatus(BPlugin.DB, BPlugin.Name, d.ID, ch.DeviceID, string(ch.Status)); err != nil {
+						BPlugin.Error(err.Error())
+					}
+					return true
+				})
 			} else {
 				return
 			}
@@ -168,12 +213,12 @@ func (c *BConfig) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 		})
 		_ = tx.Respond(resp)
 
-		BPlugin.Debug("获取设备信息")
 		if !isUnregister {
-			go d.QueryDeviceInfo()
-			go d.DeviceWorkInfo(0xFFFFFFFF)
+			BPlugin.Debug("获取设备信息")
+			//go d.QueryDeviceInfo()
+			//go d.DeviceWorkInfo(0xFFFFFFFF)
 
-			go d.GetFrontAbility() // 获取前端支持能力集
+			//go d.GetFrontAbility() // 获取前端支持能力集
 
 			go d.syncChannels()
 		}
@@ -260,24 +305,28 @@ func (c *BConfig) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 
 		var body string
 		switch gen.EventType {
-		case "Keepalive":
-			d.LastKeepaliveAt = time.Now()
-			//callID !="" 说明是订阅的事件类型信息
-			if d.lastSyncTime.IsZero() {
-				go d.syncChannels()
-			} else {
-				d.channelMap.Range(func(key, value interface{}) bool {
-					if conf.InviteMode == INVIDE_MODE_AUTO {
-						value.(*Channel).TryAutoInvite(&InviteOptions{})
-					}
-					return true
-				})
-			}
-			//在KeepLive 进行位置订阅的处理，如果开启了自动订阅位置，则去订阅位置
-			if c.Position.AutosubPosition && time.Since(d.GpsTime) > c.Position.Interval*2 {
-				d.MobilePositionSubscribe(d.ID, c.Position.Expires, c.Position.Interval)
-				BPlugin.Debug("Mobile Position Subscribe", zap.String("deviceID", d.ID))
-			}
+		//case "Keepalive": // B接口没有keepalive消息只有刷新注册
+		//	BPlugin.Debug("B 心跳保持", zap.String("id", id))
+		//d.LastKeepaliveAt = time.Now()
+		////callID !="" 说明是订阅的事件类型信息
+		//if d.lastSyncTime.IsZero() {
+		//	go d.syncChannels()
+		//} else {
+		//	d.channelMap.Range(func(key, value interface{}) bool {
+		//		if conf.InviteMode == INVIDE_MODE_AUTO {
+		//			value.(*Channel).TryAutoInvite(&InviteOptions{})
+		//		}
+		//		return true
+		//	})
+		//}
+		//////在KeepLive 进行位置订阅的处理，如果开启了自动订阅位置，则去订阅位置
+		////if c.Position.AutosubPosition && time.Since(d.GpsTime) > c.Position.Interval*2 {
+		////	d.MobilePositionSubscribe(d.ID, c.Position.Expires, c.Position.Interval)
+		////	BPlugin.Debug("Mobile Position Subscribe", zap.String("deviceID", d.ID))
+		////}
+		//if err := model.UpdateDeviceKeepalive(BPlugin.DB, BPlugin.Name, d.ID); err != nil {
+		//	d.Sugar().Errorf("B DB error:%v", err)
+		//}
 		case "Catalog":
 			//d.UpdateChannels(temp.DeviceList...)
 		case "RecordInfo":
@@ -404,7 +453,10 @@ func (c *BConfig) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 			}
 
 			BPlugin.Sugar().Debugf("%#v", ability)
-
+		case "Push_Resource": // 资源上报
+			d.Debug("资源上报Push_Resource", zap.String("EventType", gen.EventType), zap.String("body", req.Body()))
+		case "Response_Resource": // 资源信息获取
+			d.Debug("资源信息获取Response_Resource", zap.String("EventType", gen.EventType), zap.String("body", req.Body()))
 		default:
 			d.Warn("Not supported EventType", zap.String("EventType", gen.EventType), zap.String("body", req.Body()))
 			response := sip.NewResponseFromRequest("", req, http.StatusBadRequest, "", "")

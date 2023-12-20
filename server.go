@@ -12,7 +12,8 @@ import (
 	"github.com/ghettovoice/gosip/sip"
 	"github.com/logrusorgru/aurora"
 	"go.uber.org/zap"
-	"plugin-b/utils"
+	"m7s.live/plugin/b/model"
+	"m7s.live/plugin/b/utils"
 )
 
 var srv gosip.Server
@@ -117,7 +118,7 @@ func RequestForResponse(transport string, request sip.Request,
 func (c *BConfig) startServer() {
 	addr := c.ListenAddr + ":" + strconv.Itoa(int(c.SipPort))
 
-	logger := utils.NewZapLogger(BPlugin.Logger, "GB SIP Server", nil)
+	logger := utils.NewZapLogger(BPlugin.Logger, "B-Interface SIP Server", nil)
 	logger.SetLevel(uint32(levelMap[c.LogLevel]))
 	// logger := log.NewDefaultLogrusLogger().WithPrefix("GB SIP Server")
 	srvConf := gosip.ServerConfig{}
@@ -131,9 +132,9 @@ func (c *BConfig) startServer() {
 	srv.OnRequest(sip.BYE, c.OnBye)
 	err := srv.Listen(strings.ToLower(c.SipNetwork), addr)
 	if err != nil {
-		BPlugin.Logger.Error("gb28181 server listen", zap.Error(err))
+		BPlugin.Logger.Error("b-interface server listen", zap.Error(err))
 	} else {
-		BPlugin.Info(fmt.Sprint(aurora.Green("Server gb28181 start at"), aurora.BrightBlue(addr)))
+		BPlugin.Info(fmt.Sprint(aurora.Green("Server b-interface start at"), aurora.BrightBlue(addr)))
 	}
 
 	if c.MediaNetwork == "tcp" {
@@ -196,17 +197,39 @@ func (c *BConfig) statusCheck() {
 	Devices.Range(func(key, value any) bool {
 		d := value.(*Device)
 		if time.Since(d.UpdateTime) > c.RegisterValidity {
-			Devices.Delete(key)
+
+			if d, ok := Devices.Load(key); ok {
+				if dev, devOk := d.(*Device); devOk {
+					dev.Online = false
+					dev.Status = DeviceOfflineStatus
+					if err := model.UpdateDeviceStatus(BPlugin.DB, BPlugin.Name, dev.ID, string(dev.Status), false); err != nil {
+						BPlugin.Error(err.Error())
+					}
+				}
+			}
+			//Devices.Delete(key)
 			BPlugin.Info("Device register timeout",
 				zap.String("id", d.ID),
 				zap.Time("registerTime", d.RegisterTime),
 				zap.Time("updateTime", d.UpdateTime),
 			)
 		} else if time.Since(d.UpdateTime) > c.HeartbeatInterval*3 {
+			if d.Status == DeviceOfflineStatus {
+				return true
+			}
+			d.Online = false
 			d.Status = DeviceOfflineStatus
+
+			if err := model.UpdateDeviceStatus(BPlugin.DB, BPlugin.Name, d.ID, string(d.Status), false); err != nil {
+				BPlugin.Error(err.Error())
+			}
 			d.channelMap.Range(func(key, value any) bool {
 				ch := value.(*Channel)
+				ch.Online = false
 				ch.Status = ChannelOffStatus
+				if err := model.UpdateDeviceChannelStatus(BPlugin.DB, BPlugin.Name, d.ID, ch.DeviceID, string(ch.Status)); err != nil {
+					BPlugin.Error(err.Error())
+				}
 				return true
 			})
 			BPlugin.Info("Device offline", zap.String("id", d.ID), zap.Time("updateTime", d.UpdateTime))

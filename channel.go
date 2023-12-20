@@ -15,8 +15,8 @@ import (
 	"go.uber.org/zap"
 	. "m7s.live/engine/v4"
 	"m7s.live/engine/v4/log"
+	"m7s.live/plugin/b/utils"
 	"m7s.live/plugin/ps/v4"
-	"plugin-b/utils"
 )
 
 var QUERY_RECORD_TIMEOUT = time.Second * 5
@@ -121,27 +121,27 @@ type Channel struct {
 	ChannelInfo
 }
 
-func (c *Channel) MarshalJSON() ([]byte, error) {
+func (channel *Channel) MarshalJSON() ([]byte, error) {
 	m := map[string]any{
-		"DeviceID":     c.DeviceID,
-		"ParentID":     c.ParentID,
-		"Name":         c.Name,
-		"Manufacturer": c.Manufacturer,
-		"Model":        c.Model,
-		"Owner":        c.Owner,
-		"CivilCode":    c.CivilCode,
-		"Address":      c.Address,
-		"Port":         c.Port,
-		"Parental":     c.Parental,
-		"SafetyWay":    c.SafetyWay,
-		"RegisterWay":  c.RegisterWay,
-		"Secrecy":      c.Secrecy,
-		"Status":       c.Status,
-		"Longitude":    c.Longitude,
-		"Latitude":     c.Latitude,
-		"GpsTime":      c.GpsTime,
-		"LiveSubSP":    c.LiveSubSP,
-		"LiveStatus":   c.status.Load(),
+		"DeviceID":     channel.DeviceID,
+		"ParentID":     channel.ParentID,
+		"Name":         channel.Name,
+		"Manufacturer": channel.Manufacturer,
+		"Model":        channel.Model,
+		"Owner":        channel.Owner,
+		"CivilCode":    channel.CivilCode,
+		"Address":      channel.Address,
+		"Port":         channel.Port,
+		"Parental":     channel.Parental,
+		"SafetyWay":    channel.SafetyWay,
+		"RegisterWay":  channel.RegisterWay,
+		"Secrecy":      channel.Secrecy,
+		"Status":       channel.Status,
+		"Longitude":    channel.Longitude,
+		"Latitude":     channel.Latitude,
+		"GpsTime":      channel.GpsTime,
+		"LiveSubSP":    channel.LiveSubSP,
+		"LiveStatus":   channel.status.Load(),
 	}
 	return json.Marshal(m)
 }
@@ -163,6 +163,7 @@ type ChannelInfo struct {
 	SafetyWay    int
 	RegisterWay  int
 	Secrecy      int
+	Online       bool
 	Status       ChannelStatus
 }
 
@@ -614,54 +615,55 @@ func getSipRespErrorCode(err error) int {
 func (channel *Channel) Capture(imgSrv, timeRange, snapType, interval string) int {
 	d := channel.device
 	request := d.CreateRequest(sip.MESSAGE)
-	contentType := sip.ContentType("Application/MANSCDP+xml")
+	contentType := sip.ContentType("application/xml")
 	request.AppendHeader(&contentType)
 
-	c := struct {
-		XMLName   xml.Name `xml:"sip_xml"`
-		Text      string   `xml:",chardata"`
-		EventType string   `xml:"EventType,attr"`
-		Item      struct {
-			Text      string `xml:",chardata"`
-			Code      string `xml:"Code,attr"`
-			PicServer string `xml:"PicServer,attr"`
-			SnapType  string `xml:"SnapType,attr"`
-			Range     string `xml:"Range,attr"`
-			Interval  string `xml:"Interval,attr"`
-		} `xml:"item"`
-	}{
-		XMLName:   xml.Name{},
-		Text:      "",
-		EventType: "Camera_Snap",
-		Item: struct {
-			Text      string `xml:",chardata"`
-			Code      string `xml:"Code,attr"`
-			PicServer string `xml:"PicServer,attr"`
-			SnapType  string `xml:"SnapType,attr"`
-			Range     string `xml:"Range,attr"`
-			Interval  string `xml:"Interval,attr"`
-		}{Code: channel.DeviceID, PicServer: imgSrv, SnapType: snapType, Range: timeRange, Interval: interval},
-	}
+	//c := struct {
+	//	XMLName   xml.Name `xml:"sip_xml"`
+	//	Text      string   `xml:",chardata"`
+	//	EventType string   `xml:"EventType,attr"`
+	//	Item      struct {
+	//		Text      string `xml:",chardata"`
+	//		Code      string `xml:"Code,attr"`
+	//		PicServer string `xml:"PicServer,attr"`
+	//		SnapType  string `xml:"SnapType,attr"`
+	//		Range     string `xml:"Range,attr"`
+	//		Interval  string `xml:"Interval,attr"`
+	//	} `xml:"item"`
+	//}{
+	//	XMLName:   xml.Name{},
+	//	Text:      "",
+	//	EventType: "Camera_Snap",
+	//	Item: struct {
+	//		Text      string `xml:",chardata"`
+	//		Code      string `xml:"Code,attr"`
+	//		PicServer string `xml:"PicServer,attr"`
+	//		SnapType  string `xml:"SnapType,attr"`
+	//		Range     string `xml:"Range,attr"`
+	//		Interval  string `xml:"Interval,attr"`
+	//	}{Code: channel.DeviceID, PicServer: imgSrv, SnapType: snapType, Range: timeRange, Interval: interval},
+	//}
+	//
+	//raw, err := xml.Marshal(c)
+	//if err != nil {
+	//	BPlugin.Error(err.Error())
+	//	return -1
+	//}
+	//
+	//header := []byte(`<?xml version="1.0" encoding="UTF-8"?>`)
+	//
+	//dest := make([]byte, len(header)+len(raw))
+	//copy(dest, header)
+	//copy(dest[len(header):], raw)
 
-	raw, err := xml.Marshal(c)
-	if err != nil {
-		BPlugin.Error(err.Error())
-		return -1
-	}
+	body := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+	<SIP_XML EventType="Camera_Snap">
+		<Item Code="%s" PicServer="%s" SnapType=%s Range="%s" Interval=%s>
+	</SIP_XML>`,
+		channel.DeviceID, imgSrv, snapType, timeRange, interval)
 
-	header := []byte(`<?xml version="1.0" encoding="UTF-8"?>`)
-
-	dest := make([]byte, len(header)+len(raw))
-	copy(dest, header)
-	copy(dest[len(header):], raw)
-	fmt.Println(string(dest))
-
-	//body := fmt.Sprintf(` <?xml version="1.0" encoding="UTF-8"?>
-	//<sip_xml EventType="Camera_Snap">
-	//	<item Code="%s" PicServer="%s" SnapType =%d Range="%s" Interval=%d>
-	//</sip_xml>`, channel.DeviceID, imgSrv, snapType, timeRange, interval)
-
-	request.SetBody(string(dest), true)
+	request.SetBody(string(body), true)
+	BPlugin.Sugar().Debugf("SIP->Camera_Snap:%s", request)
 	resp, err := d.SipRequestForResponse(request)
 	if err != nil {
 		return http.StatusRequestTimeout

@@ -280,7 +280,7 @@ func (c *BConfig) API_capture(w http.ResponseWriter, r *http.Request) {
 	if c := FindChannel(id, channel); c != nil {
 		w.WriteHeader(c.Capture("http://192.168.1.166:8080/gb28181/api/imgUpload", timeRange, snapType, interval))
 	} else {
-		http.NotFound(w, r)
+		util.ReturnError(404, "设备通道未找到", w, r)
 	}
 }
 
@@ -320,7 +320,19 @@ func (c *BConfig) API_ImgUpload(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "File uploaded successfully!")
 }
 
-// API_device_info 设备基本信息获取
-func (c *BConfig) API_device_info(w http.ResponseWriter, r *http.Request) {
+// API_device_resourceInfo 资源信息获取(测试未成功)
+func (c *BConfig) API_device_resourceInfo(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		util.ReturnError(404, "设备ID为空", w, r)
+		return
+	}
+	if v, ok := Devices.Load(id); ok {
+		d := v.(*Device)
 
+		util.ReturnError(d.ResourceInfo(), "", w, r)
+		return
+	}
+
+	util.ReturnError(404, "设备未找到", w, r)
 }

@@ -1,4 +1,4 @@
-module plugin-b
+module m7s.live/plugin/b
 
 go 1.19
 

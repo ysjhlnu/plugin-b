@@ -13,10 +13,11 @@ import (
 	"go.uber.org/zap"
 	"m7s.live/engine/v4"
 	"m7s.live/engine/v4/log"
-	"plugin-b/utils"
+	"m7s.live/plugin/b/utils"
 
 	"github.com/ghettovoice/gosip/sip"
 	myip "github.com/husanpao/ip"
+	"m7s.live/plugin/b/model"
 )
 
 const TIME_LAYOUT = "2006-01-02T15:04:05"
@@ -68,6 +69,7 @@ type Device struct {
 	RegisterTime    time.Time
 	UpdateTime      time.Time
 	LastKeepaliveAt time.Time
+	Online          bool
 	Status          DeviceStatus
 	addr            sip.Address
 	sipIP           string //设备对应网卡的服务器ip
@@ -131,6 +133,52 @@ func (c *BConfig) RecoverDevice(d *Device, req sip.Request) {
 	d.mediaIP = mediaIp
 	d.NetAddr = deviceIp
 	d.UpdateTime = time.Now()
+
+	// 修改设备状态为在线
+	{
+		if err := model.UpdateDeviceStatus(BPlugin.DB, BPlugin.Name, d.ID, string(d.Status), true); err != nil {
+			BPlugin.Error("B DB error", zap.Any("error", err))
+		}
+	}
+
+	// 加载设备通道到内存
+	{
+		channelList, err := model.DeviceChannelList(BPlugin.DB, BPlugin.Name, d.ID)
+		if err != nil {
+			BPlugin.Sugar().Errorf("DB error: %v", err)
+		} else {
+			for _, ch := range channelList {
+				info := ChannelInfo{
+					DeviceID:     ch.ChannelID,
+					ParentID:     ch.ParentID,
+					Name:         ch.Name,
+					Manufacturer: ch.Manufacture,
+					Model:        ch.Model,
+					Owner:        ch.Owner,
+					CivilCode:    ch.CivilCode,
+					Address:      ch.Address,
+					Port:         ch.Port,
+					Parental:     ch.Parental,
+					SafetyWay:    ch.SafetyWay,
+					RegisterWay:  ch.RegisterWay,
+					Secrecy:      ch.Secrecy,
+					Online:       false,
+					Status:       ChannelStatus(ch.Status),
+				}
+				channel := &Channel{
+					device:      d,
+					ChannelInfo: info,
+					Logger:      d.Logger.With(zap.String("channel", info.DeviceID)),
+				}
+				if s := engine.Streams.Get(fmt.Sprintf("%s/%s/rtsp", channel.device.ID, channel.DeviceID)); s != nil {
+					channel.LiveSubSP = s.Path
+				} else {
+					channel.LiveSubSP = ""
+				}
+				d.channelMap.Store(ch.ChannelID, channel)
+			}
+		}
+	}
 }
 
 func (c *BConfig) StoreDevice(id string, req sip.Request) (d *Device) {
@@ -179,24 +227,76 @@ func (c *BConfig) StoreDevice(id string, req sip.Request) (d *Device) {
 		}
 		d.Info("StoreDevice", zap.String("deviceIp", deviceIp), zap.String("servIp", servIp), zap.String("sipIP", sipIP), zap.String("mediaIp", mediaIp))
 		Devices.Store(id, d)
-		c.SaveDevices()
+		//c.SaveDevices()
+		if err := model.CreateDevice(BPlugin.DB, BPlugin.Name, id, deviceIp, sipIP, mediaIp, DeviceRegisterStatus); err != nil {
+			d.Sugar().Errorf("B-interface DB error: %v", err)
+		}
 	}
 	return
 }
 func (c *BConfig) ReadDevices() {
-	if f, err := os.OpenFile("devices.json", os.O_RDONLY, 0644); err == nil {
-		defer f.Close()
-		var items []*Device
-		if err = json.NewDecoder(f).Decode(&items); err == nil {
-			for _, item := range items {
-				if time.Since(item.UpdateTime) < conf.RegisterValidity {
-					item.Status = "RECOVER"
-					item.Logger = BPlugin.With(zap.String("id", item.ID))
-					Devices.Store(item.ID, item)
-				}
-			}
-		}
+
+	device, err := model.DeviceList(BPlugin.DB, BPlugin.Name)
+	if err != nil {
+		BPlugin.Error("DB error", zap.Error(err))
 	}
+	for _, item := range device {
+		// 在这里不做加载通道到内存中
+		//if channelList, ok := deviceChannel[item.ID]; ok {
+		//	for _, c := range channelList {
+		//		item.channelMap.Store(c.DeviceID, c)
+		//	}
+		//}
+
+		dev := &Device{
+			ID:              item.DeviceID,
+			Name:            item.Name,
+			Manufacturer:    item.Manufacturer,
+			Model:           item.Model,
+			Logger:          BPlugin.With(zap.String("id", item.DeviceID)),
+			RegisterTime:    item.RegisterTime,
+			UpdateTime:      time.Time{},
+			LastKeepaliveAt: time.Time{},
+			Status:          DeviceOfflineStatus,
+			Online:          false,
+			sn:              0,
+			addr:            sip.Address{},
+			sipIP:           "",
+			mediaIP:         "",
+			NetAddr:         "",
+			channelMap:      sync.Map{},
+			subscriber: struct {
+				CallID  string
+				Timeout time.Time
+			}{},
+			lastSyncTime: time.Time{},
+			GpsTime:      time.Time{},
+			Longitude:    "",
+			Latitude:     "",
+		}
+		dev.Logger = BPlugin.With(zap.String("id", item.DeviceID))
+
+		Devices.Store(item.DeviceID, dev)
+		//if time.Since(item.UpdateTime) < conf.RegisterValidity {
+		//	item.Status = "RECOVER"
+		//	item.Logger = GB28181Plugin.With(zap.String("id", item.ID))
+		//	Devices.Store(item.ID, item)
+		//}
+	}
+
+	//if f, err := os.OpenFile("b_devices.json", os.O_RDONLY, 0644); err == nil {
+	//	defer f.Close()
+	//	var items []*Device
+	//	if err = json.NewDecoder(f).Decode(&items); err == nil {
+	//		for _, item := range items {
+	//			if time.Since(item.UpdateTime) < conf.RegisterValidity {
+	//				item.Status = "RECOVER"
+	//				item.Logger = BPlugin.With(zap.String("id", item.ID))
+	//				Devices.Store(item.ID, item)
+	//			}
+	//		}
+	//	}
+	//}
 }
 func (c *BConfig) SaveDevices() {
 	var item []any
@@ -216,6 +316,24 @@ func (d *Device) addOrUpdateChannel(info ChannelInfo) (c *Channel) {
 	if old, ok := d.channelMap.Load(info.DeviceID); ok {
 		c = old.(*Channel)
 		c.ChannelInfo = info
+		update := model.Gb28181DeviceChannel{
+			Name:        info.Name,
+			Manufacture: info.Manufacturer,
+			Model:       info.Model,
+			Owner:       info.Owner,
+			CivilCode:   info.CivilCode,
+			Status:      string(info.Status),
+			Address:     info.Address,
+			ParentID:    info.ParentID,
+			SafetyWay:   info.SafetyWay,
+			RegisterWay: info.RegisterWay,
+			Secrecy:     info.Secrecy,
+			Parental:    info.Parental,
+			UpdateTime:  time.Now(),
+		}
+		if err := model.UpdateDeviceChannel(BPlugin.DB, BPlugin.Name, d.ID, info.DeviceID, update); err != nil {
+			d.Sugar().Errorf("DB error: %v", err)
+		}
 	} else {
 		c = &Channel{
 			device:      d,
@@ -228,6 +346,12 @@ func (d *Device) addOrUpdateChannel(info ChannelInfo) (c *Channel) {
 			c.LiveSubSP = ""
 		}
 		d.channelMap.Store(info.DeviceID, c)
+		// 添加通道
+		if err := model.CreateDeviceChannel(BPlugin.DB, BPlugin.Name, d.ID, info.DeviceID, info.Name, info.Manufacturer,
+			info.Model, info.Owner, info.CivilCode, info.Address, info.ParentID, string(info.Status), info.SafetyWay,
+			info.RegisterWay, info.Secrecy, info.Parental); err != nil {
+			BPlugin.Sugar().Errorf("DB error: %v", err)
+		}
 	}
 
 	switch info.Status {
@@ -602,6 +726,9 @@ func (d *Device) channelOnline(DeviceID string) {
 	if v, ok := d.channelMap.Load(DeviceID); ok {
 		c := v.(*Channel)
 		c.Status = ChannelOnStatus
+		if err := model.UpdateDeviceChannelStatus(BPlugin.DB, BPlugin.Name, d.ID, DeviceID, ChannelOnStatus); err != nil {
+			d.Sugar().Errorf("DB error: %s", err)
+		}
 		c.Debug("channel online", zap.String("channelId", DeviceID))
 	} else {
 		d.Debug("update channel status failed, not found", zap.String("channelId", DeviceID))
@@ -612,8 +739,30 @@ func (d *Device) channelOffline(DeviceID string) {
 	if v, ok := d.channelMap.Load(DeviceID); ok {
 		c := v.(*Channel)
 		c.Status = ChannelOffStatus
+		if err := model.UpdateDeviceChannelStatus(BPlugin.DB, BPlugin.Name, d.ID, DeviceID, ChannelOffStatus); err != nil {
+			d.Sugar().Errorf("DB error: %s", err)
+		}
 		c.Debug("channel offline", zap.String("channelId", DeviceID))
 	} else {
 		d.Debug("update channel status failed, not found", zap.String("channelId", DeviceID))
 	}
+}
+
+// ResourceInfo 资源信息获取
+func (d *Device) ResourceInfo() int {
+	//os.Stdout.Write(debug.Stack())
+	request := d.CreateRequest(sip.MESSAGE)
+	contentType := sip.ContentType("Application/xml")
+	request.AppendHeader(&contentType)
+	request.SetBody(BuildResourceInfoGetXML(d.ID), true)
+	// 输出Sip请求设备通道信息信令
+	BPlugin.Sugar().Debugf("SIP->Request_Resource:%s", request)
+	resp, err := d.SipRequestForResponse(request)
+	if err == nil && resp != nil {
+		BPlugin.Sugar().Debugf("SIP<-Request_Resource Response: %s", resp.String())
+		return int(resp.StatusCode())
+	} else if err != nil {
+		BPlugin.Error("SIP<-Request_Resource error:", zap.Error(err))
+	}
+	return http.StatusRequestTimeout
 }

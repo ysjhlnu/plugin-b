@@ -109,3 +109,15 @@ var (
 func BuildAlarmResponseXML(id string) string {
 	return fmt.Sprintf(AlarmResponseXML, id)
 }
+
+var (
+	ResourceInfoGetXML = `<?xml version="1.0" encoding="UTF-8"?>
+<SIP_XML EventType=Request_Resource>
+<Item Code="%s" FromIndex="%d" ToIndex="%d"/>
+</SIP_XML>`
+)
+
+// BuildResourceInfoGetXML 资源信息获取
+func BuildResourceInfoGetXML(deviceID string) string {
+	return fmt.Sprintf(ResourceInfoGetXML, deviceID, 1, 10)
+}
