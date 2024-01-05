@@ -198,15 +198,18 @@ func (c *GB28181Config) statusCheck() {
 	Devices.Range(func(key, value any) bool {
 		d := value.(*Device)
 		if time.Since(d.UpdateTime) > c.RegisterValidity {
-			if d, ok := Devices.Load(key); ok {
-				if dev, devOk := d.(*Device); devOk {
-					dev.Online = false
-					dev.Status = DeviceOfflineStatus
-					if err := model.UpdateDeviceStatus(GB28181Plugin.DB, GB28181Plugin.Name, dev.ID, string(dev.Status), false); err != nil {
-						GB28181Plugin.Error(err.Error())
-					}
-				}
+			if d.Status == DeviceOfflineStatus {
+				return true
 			}
+			//if d, ok := Devices.Load(key); ok {
+			//	if dev, devOk := d.(*Device); devOk {
+			d.Online = false
+			d.Status = DeviceOfflineStatus
+			if err := model.UpdateDeviceStatus(GB28181Plugin.DB, GB28181Plugin.Name, d.ID, string(d.Status), false); err != nil {
+				GB28181Plugin.Error(err.Error())
+			}
+			//}
+			//}
 			//Devices.Delete(key)
 			GB28181Plugin.Info("Device register timeout,从设备管理中离线该设备",
 				zap.String("id", d.ID),

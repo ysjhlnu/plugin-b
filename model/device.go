@@ -2,7 +2,6 @@ package model
 
 import (
 	"gorm.io/gorm"
-	"m7s.live/plugin/gb281812022/model"
 	"time"
 )
 
@@ -62,8 +61,8 @@ func UpdateDeviceStatus(db *gorm.DB, version, deviceID, status string, online bo
 	return err
 }
 
-func DeviceList(db *gorm.DB, version string) (device []model.Gb28181Device, err error) {
-	device = make([]model.Gb28181Device, 0)
-	err = db.Model(&model.Gb28181Device{}).Where("version=?", version).Find(&device).Error
+func DeviceList(db *gorm.DB, version string) (device []Gb28181Device, err error) {
+	device = make([]Gb28181Device, 0)
+	err = db.Model(&Gb28181Device{}).Where("version=?", version).Find(&device).Error
 	return device, err
 }

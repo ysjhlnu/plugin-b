@@ -49,7 +49,7 @@ type GB28181Config struct {
 	//媒体服务器配置
 	MediaIP      string //媒体服务器地址
 	MediaPort    uint16 `default:"58200"` //媒体服务器端口
-	MediaNetwork string `default:"tcp"`   //媒体传输协议，默认UDP，可选TCP
+	MediaNetwork string `default:"udp"`   //媒体传输协议，默认UDP，可选TCP
 	MediaPortMin uint16 `default:"58200"`
 	MediaPortMax uint16 `default:"59200"`
 	// MediaIdleTimeout uint16 //推流超时时间，超过则断开链接，让设备重连

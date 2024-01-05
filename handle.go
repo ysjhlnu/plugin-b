@@ -23,6 +23,27 @@ type Authorization struct {
 	*sip.Authorization
 }
 
+func (a *Authorization) VerifyStr(username, passwd, realm, nonce string) string {
+
+	//1、将 username,realm,password 依次组合获取 1 个字符串，并用算法加密的到密文 r1
+	s1 := fmt.Sprintf("%s:%s:%s", username, realm, passwd)
+	r1 := a.getDigest(s1)
+	//2、将 method，即REGISTER ,uri 依次组合获取 1 个字符串，并对这个字符串使用算法 加密得到密文 r2
+	s2 := fmt.Sprintf("REGISTER:%s", a.Uri())
+	r2 := a.getDigest(s2)
+
+	if r1 == "" || r2 == "" {
+		GB28181Plugin.Error("Authorization algorithm wrong")
+		return ""
+	}
+	//3、将密文 1，nonce 和密文 2 依次组合获取 1 个字符串，并对这个字符串使用算法加密，获得密文 r3，即Response
+	s3 := fmt.Sprintf("%s:%s:%s", r1, nonce, r2)
+	r3 := a.getDigest(s3)
+
+	//4、计算服务端和客户端上报的是否相等
+	return r3
+}
+
 func (a *Authorization) Verify(username, passwd, realm, nonce string) bool {
 
 	//1、将 username,realm,password 依次组合获取 1 个字符串，并用算法加密的到密文 r1
@@ -75,6 +96,7 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 				zap.String("destination", req.Destination()))
 			return
 		}
+		GB28181Plugin.Sugar().Debugf("expires: %d", expSec)
 		if expSec == 0 {
 			isUnregister = true
 		}
@@ -104,6 +126,7 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 	} else {
 		// 需要密码情况 设备第一次上报，返回401和加密算法
 		if hdrs := req.GetHeaders("Authorization"); len(hdrs) > 0 {
+			GB28181Plugin.Debug("校验")
 			authenticateHeader := hdrs[0].(*sip.GenericHeader)
 			auth := &Authorization{sip.AuthFromValue(authenticateHeader.Contents)}
 
@@ -116,6 +139,7 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 			}
 
 			if dc, ok := DeviceRegisterCount.LoadOrStore(id, 1); ok && dc.(int) > MaxRegisterCount {
+				GB28181Plugin.Sugar().Warnf("%s-禁止注册", id)
 				response := sip.NewResponseFromRequest("", req, http.StatusForbidden, "Forbidden", "")
 				tx.Respond(response)
 				return
@@ -125,6 +149,13 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 				if loaded && auth.Verify(username, c.Password, c.Realm, _nonce.(string)) {
 					passAuth = true
 				} else {
+
+					GB28181Plugin.Sugar().Debugf("auth: %#v", *auth.Authorization)
+					if loaded {
+						GB28181Plugin.Sugar().Warnf("%s-注册失败,response: %s", id, auth.VerifyStr(username, c.Password, c.Realm, _nonce.(string)))
+					} else {
+						GB28181Plugin.Sugar().Warnf("%s-注册失败,无nonce", id)
+					}
 					DeviceRegisterCount.Store(id, dc.(int)+1)
 				}
 			}
@@ -197,6 +228,11 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 			HeaderName: "WWW-Authenticate",
 			Contents:   auth,
 		})
+		response.AppendHeader(&sip.GenericHeader{
+			HeaderName: "X-GB-Ver",
+			Contents:   "3.0",
+		})
+		sip.CopyHeaders("Expires", req, response)
 		_ = tx.Respond(response)
 	}
 }

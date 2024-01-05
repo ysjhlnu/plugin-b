@@ -2,7 +2,10 @@ package gb28181
 
 import (
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -287,4 +290,75 @@ func (c *GB28181Config) API_switch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	util.ReturnOK(w, r)
+}
+
+// API_snapshot 图像抓拍
+func (c *GB28181Config) API_snapshot(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	id := query.Get("id")
+	channel := query.Get("channel")
+	ch := FindChannel(id, channel)
+	if ch == nil {
+		util.ReturnError(util.APIErrorNotFound, fmt.Sprintf("device %s  not found", id), w, r)
+		return
+	}
+	code := ch.ImageCaptureConfig()
+	util.ReturnError(code, "device received", w, r)
+}
+
+// API_file_upload 文件上传
+func (c *GB28181Config) API_file_upload(w http.ResponseWriter, req *http.Request) {
+	contentType := req.Header.Get("content-type")
+	contentLen := req.ContentLength
+
+	fmt.Printf("upload content-type:%s,content-length:%d", contentType, contentLen)
+	if !strings.Contains(contentType, "multipart/form-data") {
+		w.Write([]byte("content-type must be multipart/form-data"))
+		return
+	}
+	if contentLen >= 4*1024*1024 { // 10 MB
+		w.Write([]byte("file to large,limit 4MB"))
+		return
+	}
+
+	err := req.ParseMultipartForm(4 * 1024 * 1024)
+	if err != nil {
+		//http.Error(w, err.Error(), http.StatusInternalServerError)
+		w.Write([]byte("ParseMultipartForm error:" + err.Error()))
+		return
+	}
+
+	if len(req.MultipartForm.File) == 0 {
+		w.Write([]byte("not have any file"))
+		return
+	}
+
+	for name, files := range req.MultipartForm.File {
+		fmt.Printf("req.MultipartForm.File,name=%s", name)
+
+		if len(files) != 1 {
+			w.Write([]byte("too many files"))
+			return
+		}
+		if name == "" {
+			w.Write([]byte("is not FileData"))
+			return
+		}
+
+		for _, f := range files {
+			handle, err := f.Open()
+			if err != nil {
+				w.Write([]byte(fmt.Sprintf("unknown error,fileName=%s,fileSize=%d,err:%s", f.Filename, f.Size, err.Error())))
+				return
+			}
+
+			path := "./uploads/" + f.Filename
+			dst, _ := os.Create(path)
+			io.Copy(dst, handle)
+			dst.Close()
+			fmt.Printf("successful uploaded,fileName=%s,fileSize=%.2f MB,savePath=%s \n", f.Filename, float64(contentLen)/1024/1024, path)
+
+			w.Write([]byte("successful,url=" + url.QueryEscape(f.Filename)))
+		}
+	}
 }

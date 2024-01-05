@@ -565,3 +565,30 @@ func getSipRespErrorCode(err error) int {
 		return http.StatusInternalServerError
 	}
 }
+
+func (channel *Channel) ImageCaptureConfig() int {
+	d := channel.device
+	request := d.CreateRequest(sip.MESSAGE)
+	contentType := sip.ContentType("Application/MANSCDP+xml")
+	request.AppendHeader(&contentType)
+	port := sip.Port(conf.SipPort)
+	via := sip.ViaHop{
+		ProtocolName:    "SIP",
+		ProtocolVersion: "2.0",
+		Transport:       "UDP",
+		Host:            d.sipIP,
+		Port:            &port,
+		Params:          sip.NewParams().Add("branch", sip.String{Str: sip.GenerateBranch()}).Add("rport", nil),
+	}
+	request.AppendHeader(sip.ViaHeader{&via})
+
+	body := BuildImageCaptureConfig(d.sn, 1, 1, channel.DeviceID, "http://192.168.1.166:8080/gb28181/api/file/upload", "123")
+	request.SetBody(body, true)
+
+	GB28181Plugin.Sugar().Debugf("SIP->image capture config: \n%s", request)
+	resp, err := d.SipRequestForResponse(request)
+	if err != nil {
+		return http.StatusRequestTimeout
+	}
+	return int(resp.StatusCode())
+}

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"golang.org/x/net/html/charset"
 	"m7s.live/plugin/gb28181/v4/utils"
+	"math/rand"
+	"strconv"
 	"testing"
 )
 
@@ -61,4 +63,22 @@ func TestDecodeXML(t *testing.T) {
 		}
 	}
 	fmt.Println(temp.RecordList[0])
+}
+
+func TestGenSSRC(t *testing.T) {
+	var IsLive bool = true
+	serial := "34020000002000000001"
+	ssrc := make([]byte, 10)
+	if IsLive {
+		ssrc[0] = '0'
+	} else {
+		ssrc[0] = '1'
+	}
+	copy(ssrc[1:6], serial[3:8])
+	randNum := 1000 + rand.Intn(8999)
+	copy(ssrc[6:], strconv.Itoa(randNum))
+	ssrcInt := string(ssrc)
+	_ssrc, _ := strconv.ParseInt(ssrcInt, 10, 0)
+	SSRC := uint32(_ssrc)
+	fmt.Printf("%010d\n", SSRC)
 }

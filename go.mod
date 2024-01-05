@@ -11,6 +11,7 @@ require (
 	go.uber.org/zap v1.26.0
 	golang.org/x/net v0.15.0
 	golang.org/x/text v0.13.0
+	gorm.io/gorm v1.25.5
 	m7s.live/engine/v4 v4.13.12
 	m7s.live/plugin/ps/v4 v4.1.2
 )
@@ -18,17 +19,19 @@ require (
 require (
 	github.com/bluenviron/mediacommon v1.3.0 // indirect
 	github.com/cnotch/ipchub v1.1.0 // indirect
-	github.com/denisbrodbeck/machineid v1.0.1 // indirect
+	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
 	github.com/discoviking/fsm v0.0.0-20150126104936-f4a273feecca // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
+	github.com/go-sql-driver/mysql v1.7.0 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
 	github.com/gobwas/httphead v0.1.0 // indirect
 	github.com/gobwas/pool v0.2.1 // indirect
 	github.com/gobwas/ws v1.3.0 // indirect
 	github.com/golang/mock v1.6.0 // indirect
 	github.com/google/pprof v0.0.0-20230912144702-c363fe2c2ed8 // indirect
-	github.com/google/uuid v1.3.1 // indirect
+	github.com/jinzhu/inflection v1.0.0 // indirect
+	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/logrusorgru/aurora v2.0.3+incompatible // indirect
 	github.com/lufia/plan9stats v0.0.0-20230326075908-cb1d2100619a // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
@@ -62,6 +65,7 @@ require (
 	golang.org/x/tools v0.13.0 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	gorm.io/driver/mysql v1.5.2 // indirect
 )
 
 replace m7s.live/engine/v4 => /home/cqset/code/go/src/github.com/ysjhlnu/self_monibuca/engine
