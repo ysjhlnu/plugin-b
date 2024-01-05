@@ -3,9 +3,11 @@ package b
 import (
 	"context"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -316,6 +318,19 @@ func (d *Device) addOrUpdateChannel(info ChannelInfo) (c *Channel) {
 	if old, ok := d.channelMap.Load(info.DeviceID); ok {
 		c = old.(*Channel)
 		c.ChannelInfo = info
+		var (
+			lon, lat float64
+			err      error
+		)
+		lon, err = strconv.ParseFloat(info.Longitude, 64)
+		if err != nil {
+			d.Sugar().Errorf("parse location error:%v", err)
+		}
+		lat, err = strconv.ParseFloat(info.Latitude, 64)
+		if err != nil {
+			d.Sugar().Errorf("parse location error:%v", err)
+		}
+
 		update := model.Gb28181DeviceChannel{
 			Name:        info.Name,
 			Manufacture: info.Manufacturer,
@@ -329,6 +344,8 @@ func (d *Device) addOrUpdateChannel(info ChannelInfo) (c *Channel) {
 			RegisterWay: info.RegisterWay,
 			Secrecy:     info.Secrecy,
 			Parental:    info.Parental,
+			Longitude:   lon,
+			Latitude:    lat,
 			UpdateTime:  time.Now(),
 		}
 		if err := model.UpdateDeviceChannel(BPlugin.DB, BPlugin.Name, d.ID, info.DeviceID, update); err != nil {
@@ -347,9 +364,42 @@ func (d *Device) addOrUpdateChannel(info ChannelInfo) (c *Channel) {
 		}
 		d.channelMap.Store(info.DeviceID, c)
 		// 添加通道
-		if err := model.CreateDeviceChannel(BPlugin.DB, BPlugin.Name, d.ID, info.DeviceID, info.Name, info.Manufacturer,
-			info.Model, info.Owner, info.CivilCode, info.Address, info.ParentID, string(info.Status), info.SafetyWay,
-			info.RegisterWay, info.Secrecy, info.Parental); err != nil {
+		var (
+			lon, lat float64
+			err      error
+		)
+		lon, err = strconv.ParseFloat(info.Longitude, 64)
+		if err != nil {
+			d.Sugar().Errorf("parse location error:%v", err)
+		}
+		lat, err = strconv.ParseFloat(info.Latitude, 64)
+		if err != nil {
+			d.Sugar().Errorf("parse location error:%v", err)
+		}
+		create := model.Gb28181DeviceChannel{
+			Version:     BPlugin.Name,
+			DeviceID:    d.ID,
+			ChannelID:   info.DeviceID,
+			Name:        info.Name,
+			Manufacture: info.Manufacturer,
+			Model:       info.Model,
+			Owner:       info.Owner,
+			CivilCode:   info.CivilCode,
+			Status:      string(info.Status),
+			Address:     info.Address,
+			ParentID:    info.ParentID,
+			SafetyWay:   info.SafetyWay,
+			RegisterWay: info.RegisterWay,
+			Secrecy:     info.Secrecy,
+			Longitude:   lon,
+			Latitude:    lat,
+			Parental:    info.Parental,
+			SubCount:    0,
+			GpsTime:     time.Time{},
+			CreateTime:  time.Now(),
+			UpdateTime:  time.Now(),
+		}
+		if err := model.CreateDeviceChannel(BPlugin.DB, &create); err != nil {
 			BPlugin.Sugar().Errorf("DB error: %v", err)
 		}
 	}
@@ -748,15 +798,43 @@ func (d *Device) channelOffline(DeviceID string) {
 	}
 }
 
+type resourceGet struct {
+	XMLName   xml.Name `xml:"SIP_XML"`
+	Text      string   `xml:",chardata"`
+	EventType string   `xml:"EventType,attr"`
+	Item      struct {
+		Text      string `xml:",chardata"`
+		Code      string `xml:"Code,attr"`
+		FromIndex string `xml:"FromIndex,attr"`
+		ToIndex   string `xml:"ToIndex,attr"`
+	} `xml:"Item"`
+}
+
 // ResourceInfo 资源信息获取
 func (d *Device) ResourceInfo() int {
-	//os.Stdout.Write(debug.Stack())
 	request := d.CreateRequest(sip.MESSAGE)
-	contentType := sip.ContentType("Application/xml")
+	contentType := sip.ContentType("application/xml")
 	request.AppendHeader(&contentType)
+
+	//r := resourceGet{
+	//	EventType: "Request_Resource",
+	//	Item: struct {
+	//		Text      string `xml:",chardata"`
+	//		Code      string `xml:"Code,attr"`
+	//		FromIndex string `xml:"FromIndex,attr"`
+	//		ToIndex   string `xml:"ToIndex,attr"`
+	//	}{
+	//		Code:      d.ID,
+	//		FromIndex: "1",
+	//		ToIndex:   "10",
+	//	},
+	//}
+	//b, _ := xml.MarshalIndent(r, "", "	")
+	//b = append([]byte(xml.Header), b...)
+
 	request.SetBody(BuildResourceInfoGetXML(d.ID), true)
-	// 输出Sip请求设备通道信息信令
-	BPlugin.Sugar().Debugf("SIP->Request_Resource:%s", request)
+	//request.SetBody(string(b), true)
+	BPlugin.Sugar().Debugf("SIP->Request_Resource: \n%s", request)
 	resp, err := d.SipRequestForResponse(request)
 	if err == nil && resp != nil {
 		BPlugin.Sugar().Debugf("SIP<-Request_Resource Response: %s", resp.String())

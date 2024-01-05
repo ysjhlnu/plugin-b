@@ -26,7 +26,7 @@ type BConfig struct {
 	SipIP      string   //sip 服务器公网IP
 	SipPort    uint16   `default:"15060"`              //sip 服务器端口，默认 5060
 	Serial     string   `default:"340200000020000001"` //sip 服务器 id, 默认 340200000020000001
-	Realm      string   `default:"34020000"`           //sip 服务器域，默认 34020000
+	Realm      string   `default:"340200000"`          //sip 服务器域，默认 34020000
 	Username   string   //sip 服务器账号
 	Password   string   `default:"123456"` //sip 服务器密码
 	Port       struct { // 新配置方式

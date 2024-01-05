@@ -35,6 +35,7 @@ func (c *BConfig) API_records(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	id := query.Get("id")
 	channel := query.Get("channel")
+	videoType := query.Get("type")
 	startTime := query.Get("startTime")
 	endTime := query.Get("endTime")
 	trange := strings.Split(query.Get("range"), "-")
@@ -43,7 +44,7 @@ func (c *BConfig) API_records(w http.ResponseWriter, r *http.Request) {
 		endTime = trange[1]
 	}
 	if c := FindChannel(id, channel); c != nil {
-		res, err := c.QueryRecord(startTime, endTime)
+		res, err := c.QueryRecord(videoType, startTime, endTime)
 		if err == nil {
 			util.ReturnValue(res, w, r)
 		} else {
@@ -329,7 +330,6 @@ func (c *BConfig) API_device_resourceInfo(w http.ResponseWriter, r *http.Request
 	}
 	if v, ok := Devices.Load(id); ok {
 		d := v.(*Device)
-
 		util.ReturnError(d.ResourceInfo(), "", w, r)
 		return
 	}

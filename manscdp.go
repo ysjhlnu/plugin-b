@@ -15,16 +15,11 @@ var (
 </Query>
 `
 	// RecordInfoXML 获取录像文件列表xml样式
-	RecordInfoXML = `<?xml version="1.0"?>
-<Query>
-<CmdType>RecordInfo</CmdType>
-<SN>%d</SN>
-<DeviceID>%s</DeviceID>
-<StartTime>%s</StartTime>
-<EndTime>%s</EndTime>
-<Secrecy>0</Secrecy>
-<Type>all</Type>
-</Query>
+	RecordInfoXML = `<?xml version="1.0" encoding="UTF-8"?>
+<SIP_XML EventType="Request_History_Video">
+<Item Code="%s" Type="%s" UserCode="%s" BeginTime="%s"
+EndTime="%s" FromInx="1" ToIndex="1"/>
+</SIP_XML>
 `
 	// DeviceInfoXML 查询设备详情xml样式
 	DeviceInfoXML = `<?xml version="1.0" encoding="UTF-8"?>
@@ -85,8 +80,8 @@ func BuildCatalogXML(sn int, id string) string {
 }
 
 // BuildRecordInfoXML 获取录像文件列表指令
-func BuildRecordInfoXML(sn int, id string, start, end int64) string {
-	return fmt.Sprintf(RecordInfoXML, sn, id, intTotime(start).Format("2006-01-02T15:04:05"), intTotime(end).Format("2006-01-02T15:04:05"))
+func BuildRecordInfoXML(deviceID, channelID, videoType string, start, end int64) string {
+	return fmt.Sprintf(RecordInfoXML, deviceID, videoType, channelID, intTotime(start).Format("2006-01-02T15:04:05Z"), intTotime(end).Format("2006-01-02T15:04:05Z"))
 }
 
 // BuildDevicePositionXML 订阅设备位置
@@ -113,7 +108,7 @@ func BuildAlarmResponseXML(id string) string {
 var (
 	ResourceInfoGetXML = `<?xml version="1.0" encoding="UTF-8"?>
 <SIP_XML EventType=Request_Resource>
-<Item Code="%s" FromIndex="%d" ToIndex="%d"/>
+	<Item Code="%s" FromIndex=%d ToIndex=%d />
 </SIP_XML>`
 )
 

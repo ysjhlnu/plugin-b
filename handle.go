@@ -145,10 +145,28 @@ func (c *BConfig) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 				BPlugin.Debug("设备第二次上报，校验")
 				_nonce, loaded := DeviceNonce.Load(id)
 				if _nonce == nil {
-					BPlugin.Sugar().Warnf("%s--平台删除改Nonce", id)
+					//BPlugin.Sugar().Warnf("%s--平台删除改Nonce", id)
+					BPlugin.Sugar().Warnf("%s--刷新注册", id)
 					response := sip.NewResponseFromRequest("", req, http.StatusInternalServerError, "Forbidden", "")
 					tx.Respond(response)
 					return
+
+					//BPlugin.Info("OnRegister unauthorized", zap.String("id", id), zap.String("source", req.Source()),
+					//	zap.String("destination", req.Destination()))
+					//response := sip.NewResponseFromRequest("", req, http.StatusUnauthorized, "Unauthorized", "")
+					//_nonce, _ := DeviceNonce.LoadOrStore(id, utils.RandNumString(32))
+					//auth := fmt.Sprintf(
+					//	`Digest realm="%s",algorithm=%s,nonce="%s"`,
+					//	c.Realm,
+					//	"MD5",
+					//	_nonce.(string),
+					//)
+					//response.AppendHeader(&sip.GenericHeader{
+					//	HeaderName: "WWW-Authenticate",
+					//	Contents:   auth,
+					//})
+					//_ = tx.Respond(response)
+					//return
 				}
 				BPlugin.Sugar().Debugf("nonce: %v,load: %v", _nonce, loaded)
 				BPlugin.Sugar().Debugf("verify: %v", auth.Verify(username, c.Password, c.Realm, _nonce.(string)))
@@ -489,85 +507,51 @@ func (c *BConfig) OnNotify(req sip.Request, tx sip.ServerTransaction) {
 			XMLName   xml.Name `xml:"SIP_XML"`
 			Text      string   `xml:",chardata"`
 			EventType string   `xml:"EventType,attr"`
+			Code      string   `xml:"Code"` // 父节点（平台、场所、前端设备）地址编码
+			SubList   SubList  `xml:"SubList"`
 		}{}
 
 		decoder := xml.NewDecoder(bytes.NewReader([]byte(req.Body())))
+		decoder.Strict = false
 		decoder.CharsetReader = charset.NewReaderLabel
 		err := decoder.Decode(g)
 		if err != nil {
 			err = utils.DecodeGbk(g, []byte(req.Body()))
 			if err != nil {
-				BPlugin.Error("decode catelog err", zap.Error(err))
+				BPlugin.Error("decode Notify err", zap.Error(err))
 			}
 		}
 
-		BPlugin.Sugar().Debugf("通用解析： %#v", g)
-
-		temp := &struct {
-			XMLName   xml.Name `xml:"SIP_XML"`
-			Text      string   `xml:",chardata"`
-			EventType string   `xml:"EventType,attr"`
-			Code      struct {
-				Text string `xml:",chardata"` // 父节点（平台、场所、前端设备）地址编码
-			} `xml:"Code"`
-			SubList struct { // 场地、前端设备、摄像机的地址编码
-				Text   string `xml:",chardata"`
-				SubNum string `xml:"SubNum,attr"`
-				Item   []struct {
-					Text       string `xml:",chardata"`
-					Code       string `xml:"Code,attr"`       // 设备地址编码
-					Name       string `xml:"Name,attr"`       // 名 称
-					Status     string `xml:"Status,attr"`     // 节点状态值  0：不可用，1：可用
-					DecoderTag string `xml:"DecoderTag,attr"` // 解 码 插 件 标 签
-					Longitude  string `xml:"Longitude,attr"`  // 经度值
-					Latitude   string `xml:"Latitude,attr"`   // 纬度值
-					SubNum     string `xml:"SubNum,attr"`     // 包含的字节点数目
-				} `xml:"Item"`
-			} `xml:"SubList"`
-		}{}
-
-		decoder = xml.NewDecoder(bytes.NewReader([]byte(req.Body())))
-		decoder.CharsetReader = charset.NewReaderLabel
-		err = decoder.Decode(temp)
-		if err != nil {
-			err = utils.DecodeGbk(temp, []byte(req.Body()))
-			if err != nil {
-				BPlugin.Error("decode catelog err", zap.Error(err))
-			}
-		}
+		//BPlugin.Sugar().Debugf("通用解析： %#v", g)
 
 		var body string
-		switch temp.EventType {
+		switch g.EventType {
 
 		case "Push_Resourse": // 资源上报
 			// 资源上报属于数据接口。前端系统加电启动并初次注册成功后，应向平台上报前端系统的设备资源信息
 			BPlugin.Debug("资源上报")
-			deviceList := make([]*notifyMessage, 0, len(temp.SubList.Item))
-			for _, t := range temp.SubList.Item {
+			deviceList := make([]*notifyMessage, 0, len(g.SubList.Item))
+			for _, t := range g.SubList.Item {
 
 				d.UpdateChannelPosition(t.Code, t.Longitude, t.Latitude)
+				var status string = "OFF"
+				switch t.Status {
+				case "0":
+					status = "OFF"
+				case "1":
+					status = "ON"
+				}
 
 				deviceList = append(deviceList, &notifyMessage{
-					DeviceID:     t.Code,
-					ParentID:     temp.Code.Text,
-					Name:         t.Name,
-					Manufacturer: "",
-					Model:        "",
-					Owner:        "",
-					CivilCode:    "",
-					Address:      "",
-					Port:         0,
-					Parental:     0,
-					SafetyWay:    0,
-					RegisterWay:  0,
-					Secrecy:      0,
-					Status:       t.Status,
-					Event:        t.Status,
-					Latitude:     t.Latitude,
-					Longitude:    t.Longitude,
+					DeviceID:  t.Code,
+					ParentID:  g.Code,
+					Name:      t.Name,
+					Status:    status,
+					Event:     t.Status,
+					Latitude:  t.Latitude,
+					Longitude: t.Longitude,
 				})
 			}
-			BPlugin.Sugar().Debugf("%#v", deviceList)
 			d.UpdateChannelStatus(deviceList)
 		case "Snapshot_Notify": // 图像数据上报通知
 
@@ -605,7 +589,7 @@ func (c *BConfig) OnNotify(req sip.Request, tx sip.ServerTransaction) {
 		// case "Alarm":
 		// 	//报警事件通知 TODO
 		default:
-			d.Warn("Not supported CmdType", zap.String("EventType", temp.EventType), zap.String("body", req.Body()))
+			d.Warn("Not supported CmdType", zap.String("EventType", g.EventType), zap.String("body", req.Body()))
 			response := sip.NewResponseFromRequest("", req, http.StatusBadRequest, "", "")
 			tx.Respond(response)
 			return

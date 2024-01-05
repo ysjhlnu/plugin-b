@@ -67,27 +67,8 @@ func UpdateDeviceStatus(db *gorm.DB, version, deviceID, status string, online bo
 	return err
 }
 
-func CreateDeviceChannel(db *gorm.DB, version, deviceID, channelID, name, manufacturer, model, owner, civilCode, address, parentID, status string,
-	safetyWay, registerWay, secrecy, parental int) (err error) {
-	err = db.Create(&Gb28181DeviceChannel{
-		Version:     version,
-		ChannelID:   channelID,
-		Name:        name,
-		Manufacture: manufacturer,
-		Model:       model,
-		Owner:       owner,
-		CivilCode:   civilCode,
-		Address:     address,
-		ParentID:    parentID,
-		SafetyWay:   safetyWay,
-		RegisterWay: registerWay,
-		Secrecy:     secrecy,
-		Status:      status,
-		DeviceID:    deviceID,
-		Parental:    parental,
-		CreateTime:  time.Now(),
-		UpdateTime:  time.Now(),
-	}).Error
+func CreateDeviceChannel(db *gorm.DB, create *Gb28181DeviceChannel) (err error) {
+	err = db.Create(&create).Error
 	return err
 }
 

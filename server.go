@@ -197,16 +197,16 @@ func (c *BConfig) statusCheck() {
 	Devices.Range(func(key, value any) bool {
 		d := value.(*Device)
 		if time.Since(d.UpdateTime) > c.RegisterValidity {
-
-			if d, ok := Devices.Load(key); ok {
-				if dev, devOk := d.(*Device); devOk {
-					dev.Online = false
-					dev.Status = DeviceOfflineStatus
-					if err := model.UpdateDeviceStatus(BPlugin.DB, BPlugin.Name, dev.ID, string(dev.Status), false); err != nil {
-						BPlugin.Error(err.Error())
-					}
-				}
+			if d.Status == DeviceOfflineStatus {
+				return true
 			}
+
+			d.Online = false
+			d.Status = DeviceOfflineStatus
+			if err := model.UpdateDeviceStatus(BPlugin.DB, BPlugin.Name, d.ID, string(d.Status), false); err != nil {
+				BPlugin.Error(err.Error())
+			}
+
 			//Devices.Delete(key)
 			BPlugin.Info("Device register timeout",
 				zap.String("id", d.ID),

@@ -234,10 +234,10 @@ func (channel *Channel) CreateRequst(Method sip.RequestMethod) (req sip.Request)
 	return req
 }
 
-func (channel *Channel) QueryRecord(startTime, endTime string) ([]*Record, error) {
+func (channel *Channel) QueryRecord(videoType, startTime, endTime string) ([]*Record, error) {
 	d := channel.device
 	request := d.CreateRequest(sip.MESSAGE)
-	contentType := sip.ContentType("Application/MANSCDP+xml")
+	contentType := sip.ContentType("application/xml")
 	request.AppendHeader(&contentType)
 	// body := fmt.Sprintf(`<?xml version="1.0"?>
 	// 	<Query>
@@ -251,7 +251,7 @@ func (channel *Channel) QueryRecord(startTime, endTime string) ([]*Record, error
 	// 	</Query>`, d.sn, channel.DeviceID, startTime, endTime)
 	start, _ := strconv.ParseInt(startTime, 10, 0)
 	end, _ := strconv.ParseInt(endTime, 10, 0)
-	body := BuildRecordInfoXML(d.sn, channel.DeviceID, start, end)
+	body := BuildRecordInfoXML(d.ID, channel.DeviceID, videoType, start, end)
 	request.SetBody(body, true)
 
 	resultCh := RecordQueryLink.WaitResult(d.ID, channel.DeviceID, d.sn, QUERY_RECORD_TIMEOUT)
