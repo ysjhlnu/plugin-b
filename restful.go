@@ -31,6 +31,7 @@ func (c *BConfig) API_list(w http.ResponseWriter, r *http.Request) {
 	}, w, r)
 }
 
+// API_records 录像检索
 func (c *BConfig) API_records(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	id := query.Get("id")
@@ -55,43 +56,43 @@ func (c *BConfig) API_records(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (c *BConfig) API_control(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Query().Get("id")
-	channel := r.URL.Query().Get("channel")
-	ptzcmd := r.URL.Query().Get("ptzcmd")
-	l := r.URL.Query().Get("l") // 横向运动速度
-	p := r.URL.Query().Get("p") // 纵向运动速度
-	if c := FindChannel(id, channel); c != nil {
-		util.ReturnError(0, fmt.Sprintf("control code:%d", c.Control(ptzcmd, l, p)), w, r)
-	} else {
-		util.ReturnError(util.APIErrorNotFound, fmt.Sprintf("device %q channel %q not found", id, channel), w, r)
-	}
-}
+//func (c *BConfig) API_control(w http.ResponseWriter, r *http.Request) {
+//	id := r.URL.Query().Get("id")
+//	channel := r.URL.Query().Get("channel")
+//	ptzcmd := r.URL.Query().Get("ptzcmd")
+//	l := r.URL.Query().Get("l") // 横向运动速度
+//	p := r.URL.Query().Get("p") // 纵向运动速度
+//	if c := FindChannel(id, channel); c != nil {
+//		util.ReturnError(0, fmt.Sprintf("control code:%d", c.Control(ptzcmd, l, p)), w, r)
+//	} else {
+//		util.ReturnError(util.APIErrorNotFound, fmt.Sprintf("device %q channel %q not found", id, channel), w, r)
+//	}
+//}
 
 func (c *BConfig) API_ptz(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	id := q.Get("id")
 	channel := q.Get("channel")
-	cmd := q.Get("cmd")   // 命令名称，见 ptz.go name2code 定义
-	hs := q.Get("hSpeed") // 水平速度
-	vs := q.Get("vSpeed") // 垂直速度
-	//zs := q.Get("zSpeed") // 缩放速度
+	cmdStr := q.Get("cmd")      // 命令名称，见 ptz.go name2code 定义
+	para1 := q.Get("cmd_para1") // 方向控制指令（上、下、左、右、左上、左下、右上、 右下等）代表横向运动速度，取值范围为[1，9]，1 为最低速度，9 为最高速度,预置位相关指令代表预置位编号，取值范围为[1，256]
+	para2 := q.Get("cmd_para2") // 方向控制指令（上、下、左、右、左上、左下、右上、右下 等）代表纵向运动速度，取值范围为[1，9]，1 为最低速度，9 为最高速度；
+	//zs := q.Get("cmd_para3") // 保留使用
 
-	//hsN, err := strconv.ParseUint(hs, 10, 8)
-	//if err != nil {
-	//	util.ReturnError(util.APIErrorQueryParse, "hSpeed parameter is invalid", w, r)
-	//	return
-	//}
-	//vsN, err := strconv.ParseUint(vs, 10, 8)
-	//if err != nil {
-	//	util.ReturnError(util.APIErrorQueryParse, "vSpeed parameter is invalid", w, r)
-	//	return
-	//}
-	//zsN, err := strconv.ParseUint(zs, 10, 8)
-	//if err != nil {
-	//	util.ReturnError(util.APIErrorQueryParse, "zSpeed parameter is invalid", w, r)
-	//	return
-	//}
+	p1, err := strconv.ParseUint(para1, 10, 64)
+	if err != nil {
+		util.ReturnError(util.APIErrorQueryParse, "parameter1 is invalid", w, r)
+		return
+	}
+	p2, err := strconv.ParseUint(para2, 10, 64)
+	if err != nil {
+		util.ReturnError(util.APIErrorQueryParse, "parameter2 is invalid", w, r)
+		return
+	}
+	cmd, err := strconv.ParseUint(cmdStr, 16, 64)
+	if err != nil {
+		util.ReturnError(util.APIErrorQueryParse, "cmd parameter is invalid", w, r)
+		return
+	}
 
 	//ptzcmd, err := toPtzStrByCmdName(cmd, uint8(hsN), uint8(vsN), uint8(zsN))
 	//if err != nil {
@@ -99,7 +100,7 @@ func (c *BConfig) API_ptz(w http.ResponseWriter, r *http.Request) {
 	//	return
 	//}
 	if c := FindChannel(id, channel); c != nil {
-		code := c.Control(cmd, hs, vs)
+		code := c.Control(cmd, p1, p2)
 		util.ReturnError(code, "device received", w, r)
 	} else {
 		util.ReturnError(util.APIErrorNotFound, fmt.Sprintf("device %q channel %q not found", id, channel), w, r)
@@ -270,16 +271,31 @@ func (c *BConfig) API_get_position(w http.ResponseWriter, r *http.Request) {
 	}, w, r)
 }
 
+// API_capture 抓图
 func (c *BConfig) API_capture(w http.ResponseWriter, r *http.Request) {
 
 	id := r.URL.Query().Get("id")
-	snapType := r.URL.Query().Get("snapType")
+	snapTypeStr := r.URL.Query().Get("snapType")
 	channel := r.URL.Query().Get("channel")
-	interval := r.URL.Query().Get("interval")
-
+	intervalStr := r.URL.Query().Get("interval")
 	timeRange := r.URL.Query().Get("timeRange")
+
+	snapType, err := strconv.Atoi(snapTypeStr)
+	if err != nil {
+		BPlugin.Sugar().Errorf("解析抓图类型错误,%v", err)
+		util.ReturnError(1000, "解析抓图类型错误", w, r)
+		return
+	}
+
+	interval, err := strconv.Atoi(intervalStr)
+	if err != nil {
+		BPlugin.Sugar().Errorf("解析抓图间隔错误,%v", err)
+		util.ReturnError(1000, "解析抓图间隔错误", w, r)
+		return
+	}
+
 	if c := FindChannel(id, channel); c != nil {
-		w.WriteHeader(c.Capture("http://192.168.1.166:8080/gb28181/api/imgUpload", timeRange, snapType, interval))
+		util.ReturnError(c.Capture("http://192.168.1.166:8080/gb28181/api/imgUpload", timeRange, snapType, interval), "device received", w, r)
 	} else {
 		util.ReturnError(404, "设备通道未找到", w, r)
 	}

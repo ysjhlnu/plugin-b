@@ -17,8 +17,7 @@ var (
 	// RecordInfoXML 获取录像文件列表xml样式
 	RecordInfoXML = `<?xml version="1.0" encoding="UTF-8"?>
 <SIP_XML EventType="Request_History_Video">
-<Item Code="%s" Type="%s" UserCode="%s" BeginTime="%s"
-EndTime="%s" FromInx="1" ToIndex="1"/>
+<Item Code="%s" Type="%s" UserCode="%s" BeginTime="%s" EndTime="%s" FromInx=1 ToIndex=1 />
 </SIP_XML>
 `
 	// DeviceInfoXML 查询设备详情xml样式
@@ -107,8 +106,8 @@ func BuildAlarmResponseXML(id string) string {
 
 var (
 	ResourceInfoGetXML = `<?xml version="1.0" encoding="UTF-8"?>
-<SIP_XML EventType=Request_Resource>
-	<Item Code="%s" FromIndex=%d ToIndex=%d />
+<SIP_XML EventType="Request_Resource">
+    <Item Code="%s" FromIndex="%d" ToIndex="%d" />
 </SIP_XML>`
 )
 

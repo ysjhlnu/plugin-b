@@ -406,10 +406,10 @@ func (d *Device) addOrUpdateChannel(info ChannelInfo) (c *Channel) {
 
 	switch info.Status {
 	case ChannelOnStatus:
-		d.Debug("receive channel online notify")
+		//d.Debug("receive channel online notify")
 		d.channelOnline(info.DeviceID)
 	case ChannelOffStatus:
-		d.Debug("receive channel offline notify")
+		//d.Debug("receive channel offline notify")
 		d.channelOffline(info.DeviceID)
 	}
 
@@ -692,7 +692,7 @@ func (d *Device) UpdateChannelPosition(channelId string, lng string, lat string)
 func (d *Device) UpdateChannelStatus(deviceList []*notifyMessage) {
 	for _, v := range deviceList {
 
-		d.Debug("receive channel add notify")
+		//d.Debug("receive channel add notify")
 		channel := ChannelInfo{
 			DeviceID:     v.DeviceID,
 			ParentID:     v.ParentID,

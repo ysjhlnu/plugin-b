@@ -8,7 +8,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// 对于录像查询，通过 queryKey (即 deviceId + channelId + sn) 唯一区分一次请求和响应
+// 对于录像查询，通过 queryKey (即 deviceId + channelId) 唯一区分一次请求和响应
 // 并将其关联起来，以实现异步响应的目的
 // 提供单例实例供调用
 var RecordQueryLink = NewRecordQueryLink(time.Second * 60)
@@ -94,9 +94,7 @@ func (c *recordQueryLink) doPut(deviceId, channelId string, sn, sum int, record 
 	return
 }
 
-func (c *recordQueryLink) WaitResult(
-	deviceId, channelId string, sn int,
-	timeout time.Duration) (resultCh <-chan recordQueryResult) {
+func (c *recordQueryLink) WaitResult(deviceId, channelId string, sn int, timeout time.Duration) (resultCh <-chan recordQueryResult) {
 
 	key := recordQueryKey(deviceId, channelId, sn)
 	c.Lock()

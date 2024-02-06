@@ -5,11 +5,9 @@ import (
 	"crypto/md5"
 	"encoding/xml"
 	"fmt"
+	"go.uber.org/zap"
 	"log"
 	"m7s.live/plugin/b/model"
-	"strconv"
-
-	"go.uber.org/zap"
 	"m7s.live/plugin/b/utils"
 
 	"github.com/ghettovoice/gosip/sip"
@@ -82,31 +80,35 @@ func (c *BConfig) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 	}
 	id := from.Address.User().String()
 
-	BPlugin.Debug("SIP<-OnMessage", zap.String("id", id), zap.String("source", req.Source()), zap.String("req", req.String()))
+	BPlugin.Sugar().WithOptions(zap.AddCallerSkip(-1)).Debug("SIP<-OnMessage", zap.String("id", id), zap.String("source", req.Source()), zap.String("req", req.String()))
 
 	isUnregister := false // true: 注销 false: 注册
-	if exps := req.GetHeaders("Expires"); len(exps) > 0 {
-		exp := exps[0]
-		expSec, err := strconv.ParseInt(exp.Value(), 10, 32)
-		if err != nil {
-			BPlugin.Info("OnRegister",
-				zap.String("error", fmt.Sprintf("wrong expire header value %q", exp)),
-				zap.String("id", id),
-				zap.String("source", req.Source()),
-				zap.String("destination", req.Destination()))
-			return
-		}
-		if expSec == 0 {
-			isUnregister = true
-		}
-	} else {
-		BPlugin.Info("OnRegister",
-			zap.String("error", "has no expire header"),
-			zap.String("id", id),
-			zap.String("source", req.Source()),
-			zap.String("destination", req.Destination()))
-		return
+	if exps := req.GetHeaders("Logout-Reason"); len(exps) > 0 {
+		isUnregister = true
+		BPlugin.Sugar().Infof("%s--注销原因: %s", id, exps[0])
 	}
+	//if exps := req.GetHeaders("Expires"); len(exps) > 0 {
+	//	exp := exps[0]
+	//	expSec, err := strconv.ParseInt(exp.Value(), 10, 32)
+	//	if err != nil {
+	//		BPlugin.Info("OnRegister",
+	//			zap.String("error", fmt.Sprintf("wrong expire header value %q", exp)),
+	//			zap.String("id", id),
+	//			zap.String("source", req.Source()),
+	//			zap.String("destination", req.Destination()))
+	//		return
+	//	}
+	//	if expSec == 0 {
+	//		isUnregister = true
+	//	}
+	//} else {
+	//	BPlugin.Info("OnRegister",
+	//		zap.String("error", "has no expire header"),
+	//		zap.String("id", id),
+	//		zap.String("source", req.Source()),
+	//		zap.String("destination", req.Destination()))
+	//	return
+	//}
 
 	BPlugin.Info("OnRegister",
 		zap.Bool("isUnregister", isUnregister),
@@ -142,35 +144,17 @@ func (c *BConfig) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 				return
 			} else {
 				// 设备第二次上报，校验
-				BPlugin.Debug("设备第二次上报，校验")
+				BPlugin.Sugar().Debugf("%s--设备第二次上报，校验", id)
 				_nonce, loaded := DeviceNonce.Load(id)
 				if _nonce == nil {
-					//BPlugin.Sugar().Warnf("%s--平台删除改Nonce", id)
 					BPlugin.Sugar().Warnf("%s--刷新注册", id)
 					response := sip.NewResponseFromRequest("", req, http.StatusInternalServerError, "Forbidden", "")
 					tx.Respond(response)
 					return
-
-					//BPlugin.Info("OnRegister unauthorized", zap.String("id", id), zap.String("source", req.Source()),
-					//	zap.String("destination", req.Destination()))
-					//response := sip.NewResponseFromRequest("", req, http.StatusUnauthorized, "Unauthorized", "")
-					//_nonce, _ := DeviceNonce.LoadOrStore(id, utils.RandNumString(32))
-					//auth := fmt.Sprintf(
-					//	`Digest realm="%s",algorithm=%s,nonce="%s"`,
-					//	c.Realm,
-					//	"MD5",
-					//	_nonce.(string),
-					//)
-					//response.AppendHeader(&sip.GenericHeader{
-					//	HeaderName: "WWW-Authenticate",
-					//	Contents:   auth,
-					//})
-					//_ = tx.Respond(response)
-					//return
 				}
-				BPlugin.Sugar().Debugf("nonce: %v,load: %v", _nonce, loaded)
-				BPlugin.Sugar().Debugf("verify: %v", auth.Verify(username, c.Password, c.Realm, _nonce.(string)))
-				BPlugin.Sugar().Debugf("verify: %v", auth.VerifyStr(username, c.Password, c.Realm, _nonce.(string)))
+				//BPlugin.Sugar().Debugf("nonce: %v,load: %v", _nonce, loaded)
+				//BPlugin.Sugar().Debugf("verify: %v", auth.Verify(username, c.Password, c.Realm, _nonce.(string)))
+				//BPlugin.Sugar().Debugf("verify: %v", auth.VerifyStr(username, c.Password, c.Realm, _nonce.(string)))
 				if loaded && auth.Verify(username, c.Password, c.Realm, _nonce.(string)) {
 					passAuth = true
 				} else {
@@ -181,14 +165,14 @@ func (c *BConfig) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 	}
 	if passAuth {
 		// 通过校验
-		BPlugin.Debug("密码校验通过")
+		BPlugin.Sugar().Debugf("%s--密码校验通过", id)
 		var d *Device
 		if isUnregister {
 			// 执行注销流程
-			tmpd, ok := Devices.LoadAndDelete(id)
+			tmp, ok := Devices.LoadAndDelete(id)
 			if ok {
 				BPlugin.Info("Unregister Device", zap.String("id", id))
-				d = tmpd.(*Device)
+				d = tmp.(*Device)
 				if err := model.UpdateDeviceStatus(BPlugin.DB, BPlugin.Name, id, DeviceOfflineStatus, false); err != nil {
 					BPlugin.Error("B-interface DB error", zap.Any("error", err))
 				}
@@ -213,17 +197,22 @@ func (c *BConfig) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 			}
 		}
 
+		// 由于刷新注册会带上第一次注册时相同的nonce,所以在这里不删除
 		// 删除nonce,在刷新注册的时候会提示401然后返回nonce再注册成功
-		BPlugin.Sugar().Infof("%s--删除nonce", id)
-		BPlugin.Sugar().Infof("%s--删除注册次数", id)
-		DeviceNonce.Delete(id)
-		DeviceRegisterCount.Delete(id)
+		//BPlugin.Sugar().Infof("%s--删除nonce", id)
+		//BPlugin.Sugar().Infof("%s--删除注册次数", id)
+		//DeviceNonce.Delete(id)
+		//DeviceRegisterCount.Delete(id)
 
 		resp := sip.NewResponseFromRequest("", req, http.StatusOK, "OK", "")
 		to, _ := resp.To()
 		resp.ReplaceHeaders("To", []sip.Header{&sip.ToHeader{Address: to.Address, Params: sip.NewParams().Add("tag", sip.String{Str: utils.RandNumString(9)})}})
 		resp.RemoveHeader("Allow")
 		expires := sip.Expires(3600)
+		if isUnregister {
+			expires = sip.Expires(0)
+		}
+
 		resp.AppendHeader(&expires)
 		resp.AppendHeader(&sip.GenericHeader{
 			HeaderName: "Date",
@@ -232,7 +221,7 @@ func (c *BConfig) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 		_ = tx.Respond(resp)
 
 		if !isUnregister {
-			BPlugin.Debug("获取设备信息")
+			BPlugin.Sugar().Debugf("%s--获取设备信息", id)
 			//go d.QueryDeviceInfo()
 			//go d.DeviceWorkInfo(0xFFFFFFFF)
 
@@ -253,6 +242,7 @@ func (c *BConfig) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 			"MD5",
 			_nonce.(string),
 		)
+		sip.CopyHeaders("Expires", req, response)
 		response.AppendHeader(&sip.GenericHeader{
 			HeaderName: "WWW-Authenticate",
 			Contents:   auth,
@@ -279,7 +269,9 @@ func (c *BConfig) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 		return
 	}
 	id := from.Address.User().String()
-	BPlugin.Debug("SIP<-OnMessage", zap.String("id", id), zap.String("source", req.Source()), zap.String("req", req.String()))
+	//BPlugin.Debug("SIP<-OnMessage", zap.String("id", id), zap.String("source", req.Source()), zap.String("req", req.String()))
+	BPlugin.Sugar().WithOptions(zap.AddCallerSkip(-1)).Debugf("SIP<-OnMessage id: %s,source: %s, req: \n%s", id, req.Source(), req.String())
+
 	if v, ok := Devices.Load(id); ok {
 		d := v.(*Device)
 		switch d.Status {
@@ -296,20 +288,6 @@ func (c *BConfig) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 			Text      string   `xml:",chardata"`
 			EventType string   `xml:"EventType,attr"`
 		}{}
-
-		//temp := &struct {
-		//	XMLName      xml.Name
-		//	CmdType      string
-		//	SN           int // 请求序列号，一般用于对应 request 和 response
-		//	DeviceID     string
-		//	DeviceName   string
-		//	Manufacturer string
-		//	Model        string
-		//	Channel      string
-		//	DeviceList   []ChannelInfo `xml:"DeviceList>Item"`
-		//	RecordList   []*Record     `xml:"RecordList>Item"`
-		//	SumNum       int           // 录像结果的总数 SumNum，录像结果会按照多条消息返回，可用于判断是否全部返回
-		//}{}
 
 		decoder := xml.NewDecoder(bytes.NewReader([]byte(req.Body())))
 		decoder.CharsetReader = charset.NewReaderLabel
@@ -347,7 +325,8 @@ func (c *BConfig) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 		//}
 		case "Catalog":
 			//d.UpdateChannels(temp.DeviceList...)
-		case "RecordInfo":
+		case "Response_History_Video":
+			d.Debug("录像检索 Response_History_Video", zap.String("EventType", gen.EventType), zap.String("body", req.Body()))
 			//RecordQueryLink.Put(d.ID, temp.DeviceID, temp.SN, temp.SumNum, temp.RecordList)
 		case "Alarm":
 			d.Status = DeviceAlarmedStatus
@@ -471,8 +450,8 @@ func (c *BConfig) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 			}
 
 			BPlugin.Sugar().Debugf("%#v", ability)
-		case "Push_Resource": // 资源上报
-			d.Debug("资源上报Push_Resource", zap.String("EventType", gen.EventType), zap.String("body", req.Body()))
+		//case "Push_Resource": // 资源上报
+		//	d.Debug("资源上报Push_Resource", zap.String("EventType", gen.EventType), zap.String("body", req.Body()))
 		case "Response_Resource": // 资源信息获取
 			d.Debug("资源信息获取Response_Resource", zap.String("EventType", gen.EventType), zap.String("body", req.Body()))
 		default:
@@ -527,9 +506,9 @@ func (c *BConfig) OnNotify(req sip.Request, tx sip.ServerTransaction) {
 		var body string
 		switch g.EventType {
 
-		case "Push_Resourse": // 资源上报
+		case "Push_Resourse", "Push_Resource": // 资源上报
 			// 资源上报属于数据接口。前端系统加电启动并初次注册成功后，应向平台上报前端系统的设备资源信息
-			BPlugin.Debug("资源上报")
+			BPlugin.Sugar().Debugf("%s--资源上报", id)
 			deviceList := make([]*notifyMessage, 0, len(g.SubList.Item))
 			for _, t := range g.SubList.Item {
 
