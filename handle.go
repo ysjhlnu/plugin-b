@@ -256,7 +256,9 @@ func (c *GB28181Config) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 	}
 	id := from.Address.User().String()
 
-	GB28181Plugin.Debug("SIP<-OnMessage", zap.String("id", id), zap.String("source", req.Source()), zap.String("req", req.String()))
+	//GB28181Plugin.Debug("SIP<-OnMessage", zap.String("id", id), zap.String("source", req.Source()), zap.String("req", req.String()))
+	GB28181Plugin.Sugar().WithOptions(zap.AddCallerSkip(-1)).Debugf("SIP<-OnMessage id: %s,source: %s, req: \n%s", id, req.Source(), req.String())
+
 	if v, ok := Devices.Load(id); ok {
 		d := v.(*Device)
 		switch d.Status {
@@ -358,6 +360,7 @@ func (c *GB28181Config) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 		GB28181Plugin.Debug("设备未注册 Unauthorized message, device not found", zap.String("id", id))
 	}
 }
+
 func (c *GB28181Config) OnBye(req sip.Request, tx sip.ServerTransaction) {
 	tx.Respond(sip.NewResponseFromRequest("", req, http.StatusOK, "OK", ""))
 }

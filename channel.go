@@ -272,17 +272,19 @@ func (channel *Channel) Control(PTZCmd string) int {
 	contentType := sip.ContentType("Application/MANSCDP+xml")
 	request.AppendHeader(&contentType)
 	body := fmt.Sprintf(`<?xml version="1.0"?>
-		<Control>
-		<CmdType>DeviceControl</CmdType>
-		<SN>%d</SN>
-		<DeviceID>%s</DeviceID>
-		<PTZCmd>%s</PTZCmd>
-		</Control>`, d.sn, channel.DeviceID, PTZCmd)
+<Control>
+<CmdType>DeviceControl</CmdType>
+<SN>%d</SN>
+<DeviceID>%s</DeviceID>
+<PTZCmd>%s</PTZCmd>
+</Control>`, d.sn, channel.DeviceID, PTZCmd)
 	request.SetBody(body, true)
+	GB28181Plugin.Sugar().Debugf("req: %s", request.String())
 	resp, err := d.SipRequestForResponse(request)
 	if err != nil {
 		return http.StatusRequestTimeout
 	}
+	GB28181Plugin.Sugar().Debugf("resp: %s", resp.String())
 	return int(resp.StatusCode())
 }
 
@@ -372,6 +374,9 @@ func (channel *Channel) Invite(opt *InviteOptions) (code int, err error) {
 	protocol := ""
 	networkType := "udp"
 	reusePort := true
+
+	GB28181Plugin.Sugar().Debugf("network mode: %s", conf.MediaNetwork)
+
 	if conf.IsMediaNetworkTCP() {
 		networkType = "tcp"
 		protocol = "TCP/"
@@ -419,6 +424,7 @@ func (channel *Channel) Invite(opt *InviteOptions) (code int, err error) {
 		HeaderName: "Subject", Contents: fmt.Sprintf("%s:%s,%s:0", channel.DeviceID, opt.ssrc, conf.Serial),
 	}
 	invite.AppendHeader(&subject)
+	GB28181Plugin.Sugar().Debugf("invite: \n%s", invite.String())
 	inviteRes, err := d.SipRequestForResponse(invite)
 	if err != nil {
 		channel.Error("invite", zap.Error(err), zap.String("msg", invite.String()))
