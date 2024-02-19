@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"go.uber.org/zap"
+	. "m7s.live/engine/v4"
 	"m7s.live/plugin/gb28181/v4/utils"
 
 	"github.com/ghettovoice/gosip/sip"
@@ -76,8 +77,8 @@ func (a *Authorization) getDigest(raw string) string {
 
 func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 	from, ok := req.From()
-	if !ok || from.Address == nil {
-		GB28181Plugin.Error("OnRegister", zap.String("error", "no from"))
+	if !ok || from.Address == nil || from.Address.User() == nil {
+		GB28181Plugin.Error("OnMessage", zap.String("error", "no id"))
 		return
 	}
 	id := from.Address.User().String()
@@ -248,10 +249,15 @@ func (d *Device) syncChannels() {
 	}
 }
 
+type MessageEvent struct {
+	Type   string
+	Device *Device
+}
+
 func (c *GB28181Config) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 	from, ok := req.From()
-	if !ok || from.Address == nil {
-		GB28181Plugin.Error("OnMessage", zap.String("error", "no from"))
+	if !ok || from.Address == nil || from.Address.User() == nil {
+		GB28181Plugin.Error("OnMessage", zap.String("error", "no id"))
 		return
 	}
 	id := from.Address.User().String()
@@ -348,6 +354,8 @@ func (c *GB28181Config) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 		case "Alarm":
 			d.Status = DeviceAlarmedStatus
 			body = BuildAlarmResponseXML(d.ID)
+		case "Broadcast":
+			GB28181Plugin.Info("broadcast message", zap.String("body", req.Body()))
 		default:
 			d.Warn("Not supported CmdType", zap.String("CmdType", temp.CmdType), zap.String("body", req.Body()))
 			response := sip.NewResponseFromRequest("", req, http.StatusBadRequest, "", "")
@@ -355,6 +363,10 @@ func (c *GB28181Config) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 			return
 		}
 
+		EmitEvent(MessageEvent{
+			Type:   temp.CmdType,
+			Device: d,
+		})
 		tx.Respond(sip.NewResponseFromRequest("", req, http.StatusOK, "OK", body))
 	} else {
 		GB28181Plugin.Debug("设备未注册 Unauthorized message, device not found", zap.String("id", id))
@@ -365,11 +377,13 @@ func (c *GB28181Config) OnBye(req sip.Request, tx sip.ServerTransaction) {
 	tx.Respond(sip.NewResponseFromRequest("", req, http.StatusOK, "OK", ""))
 }
 
+type NotifyEvent MessageEvent
+
 // OnNotify 订阅通知处理
 func (c *GB28181Config) OnNotify(req sip.Request, tx sip.ServerTransaction) {
 	from, ok := req.From()
-	if !ok || from.Address == nil {
-		GB28181Plugin.Error("OnNotify", zap.String("error", "no from"))
+	if !ok || from.Address == nil || from.Address.User() == nil {
+		GB28181Plugin.Error("OnMessage", zap.String("error", "no id"))
 		return
 	}
 	id := from.Address.User().String()
@@ -405,8 +419,8 @@ func (c *GB28181Config) OnNotify(req sip.Request, tx sip.ServerTransaction) {
 		case "MobilePosition":
 			//更新channel的坐标
 			d.UpdateChannelPosition(temp.DeviceID, temp.Time, temp.Longitude, temp.Latitude)
-		// case "Alarm":
-		// 	//报警事件通知 TODO
+		case "Alarm":
+			d.Status = DeviceAlarmedStatus
 		default:
 			d.Warn("Not supported CmdType", zap.String("CmdType", temp.CmdType), zap.String("body", req.Body()))
 			response := sip.NewResponseFromRequest("", req, http.StatusBadRequest, "", "")
@@ -414,6 +428,9 @@ func (c *GB28181Config) OnNotify(req sip.Request, tx sip.ServerTransaction) {
 			return
 		}
 
+		EmitEvent(NotifyEvent{
+			Type:   temp.CmdType,
+			Device: d})
 		tx.Respond(sip.NewResponseFromRequest("", req, http.StatusOK, "OK", body))
 	}
 }
