@@ -73,8 +73,10 @@ type GB28181Config struct {
 var SipUri *sip.SipUri
 
 func (c *GB28181Config) initRoutes() {
+
 	c.routes = make(map[string]string)
 	tempIps := myip.LocalAndInternalIPs()
+	GB28181Plugin.Sugar().Debugf("%#v", tempIps)
 	for k, v := range tempIps {
 		c.routes[k] = v
 		if lastdot := strings.LastIndex(k, "."); lastdot >= 0 {

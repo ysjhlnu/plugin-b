@@ -1,68 +1,73 @@
 package gb28181
 
 import (
-	"bytes"
 	"encoding/xml"
 	"fmt"
-	"golang.org/x/net/html/charset"
 	"m7s.live/plugin/gb28181/v4/utils"
 	"math/rand"
 	"strconv"
 	"testing"
+	"time"
 )
 
 func TestDecodeXML(t *testing.T) {
 
-	body := `<?xml version=\"1.0\" encoding=\"utf-8\"?>
-<Response>
-<CmdType>RecordInfo</CmdType>
-<SN>33</SN>\r\n
-<DeviceID>34020000001310000001</DeviceID>\r\n
-<Name>34020000001310000001</Name>\r\n
-<SumNum>1</SumNum>\r\n
-<RecordList Num="1">\r\n
-<Item>
-        <DeviceID>34020000001320500162</DeviceID>\r\n
-        <Name>34020000001320500162</Name>\r\n
-        <FilePath>99000845100866_1_20231220150852.mp4</FilePath>\r\n
-        <Address>rtsp://192.168.1.251:9913?vod=99000845100866_1_20231220150852&abc=1</Address>
-        <StartTime>2023-12-20T15:08:52</StartTime>\r\n
-        <EndTime>2023-12-20T15:09:07</EndTime>\r\n
-        <Secrecy>0</Secrecy>\r\n
-        <Type>time</Type>\r\n
-        <RecorderID>32040000002000000010</RecorderID>
-        </Item>
-</RecordList>
-</Response>`
+	body := `<?xml version="1.0" encoding="utf-8"?>
+<Notify>
+<CmdType>UploadSnapShotFinished</CmdType>
+<SN>4</SN>
+<DeviceID>15010201031321000011</DeviceID>
+<SessionID>123</SessionID>
+<SnapShotList><SnapShotFileID>15010201031321000011022024022114142500003</SnapShotFileID></SnapShotList>
+</Notify>
+`
 
-	temp := &struct {
-		XMLName      xml.Name
-		CmdType      string // 命令类型
-		SN           int    // 请求序列号，一般用于对应 request 和 response
-		DeviceID     string // 下级设备 ID
-		DeviceName   string
-		Manufacturer string
-		Model        string
-		Channel      string
-		RecordList   []*Record `xml:"RecordList>Item"`
-		SumNum       int       // 录像结果的总数 SumNum，录像结果会按照多条消息返回，可用于判断是否全部返回
-	}{}
-	decoder := xml.NewDecoder(bytes.NewReader([]byte(body)))
-	//decoder.Entity = map[string]string{
-	//	"n": "(noun)",
+	//temp := &struct {
+	//	XMLName      xml.Name
+	//	CmdType      string // 命令类型
+	//	SN           int    // 请求序列号，一般用于对应 request 和 response
+	//	DeviceID     string // 下级设备 ID
+	//	DeviceName   string
+	//	Manufacturer string
+	//	Model        string
+	//	Channel      string
+	//	RecordList   []*Record `xml:"RecordList>Item"`
+	//	SumNum       int       // 录像结果的总数 SumNum，录像结果会按照多条消息返回，可用于判断是否全部返回
+	//}{}
+	//decoder := xml.NewDecoder(bytes.NewReader([]byte(body)))
+	////decoder.Entity = map[string]string{
+	////	"n": "(noun)",
+	////}
+	////decoder.Strict = false
+	//
+	//decoder.CharsetReader = charset.NewReaderLabel
+	//err := decoder.Decode(temp)
+	//if err != nil {
+	//	t.Log(err)
+	//	err = utils.DecodeGbk(temp, []byte(body))
+	//	if err != nil {
+	//		t.Log(err)
+	//	}
 	//}
-	//decoder.Strict = false
-
-	decoder.CharsetReader = charset.NewReaderLabel
-	err := decoder.Decode(temp)
-	if err != nil {
-		t.Log(err)
-		err = utils.DecodeGbk(temp, []byte(body))
-		if err != nil {
-			t.Log(err)
-		}
+	type UploadSnapShotFinishedNotify struct {
+		XMLName      xml.Name `xml:"Notify"`
+		Text         string   `xml:",chardata"`
+		CmdType      string   `xml:"CmdType"`
+		SN           string   `xml:"SN"`
+		DeviceID     string   `xml:"DeviceID"`
+		SessionID    string   `xml:"SessionID"`
+		SnapShotList struct {
+			Text           string   `xml:",chardata"`
+			SnapShotFileID []string `xml:"SnapShotFileID"`
+		} `xml:"SnapShotList"`
 	}
-	fmt.Println(temp.RecordList[0])
+
+	tu := UploadSnapShotFinishedNotify{}
+	if err := utils.DecodeXML([]byte(body), &tu); err != nil {
+		GB28181Plugin.Error(err.Error())
+		return
+	}
+	fmt.Println(tu.SnapShotList.SnapShotFileID)
 }
 
 func TestGenSSRC(t *testing.T) {
@@ -81,4 +86,16 @@ func TestGenSSRC(t *testing.T) {
 	_ssrc, _ := strconv.ParseInt(ssrcInt, 10, 0)
 	SSRC := uint32(_ssrc)
 	fmt.Printf("%010d\n", SSRC)
+}
+
+func TestTrunc(t *testing.T) {
+	id := "15010201031321000011022024022111244200003"
+	timestamp := id[22:39]
+	ctime, err := time.Parse("20060102150405000", timestamp)
+	if err != nil {
+		t.Log(err)
+		return
+	}
+	t.Log(ctime)
+	t.Log(timestamp)
 }

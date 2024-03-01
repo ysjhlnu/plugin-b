@@ -19,7 +19,7 @@ import (
 
 var srv gosip.Server
 
-const MaxRegisterCount = 3
+const MaxRegisterCount = 5
 
 func FindChannel(deviceId string, channelId string) (c *Channel) {
 	if v, ok := Devices.Load(deviceId); ok {
@@ -166,7 +166,7 @@ func (c *GB28181Config) startJob() {
 	statusTick := time.NewTicker(c.HeartbeatInterval / 2)
 	banTick := time.NewTicker(c.RemoveBanInterval)
 	linkTick := time.NewTicker(time.Millisecond * 100)
-	GB28181Plugin.Debug("start job")
+
 	for {
 		select {
 		case <-banTick.C:

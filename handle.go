@@ -5,12 +5,11 @@ import (
 	"crypto/md5"
 	"encoding/xml"
 	"fmt"
-	"m7s.live/plugin/gb28181/v4/model"
-	"strconv"
-
 	"go.uber.org/zap"
 	. "m7s.live/engine/v4"
+	"m7s.live/plugin/gb28181/v4/model"
 	"m7s.live/plugin/gb28181/v4/utils"
+	"strconv"
 
 	"github.com/ghettovoice/gosip/sip"
 
@@ -83,12 +82,15 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 	}
 	id := from.Address.User().String()
 
-	GB28181Plugin.Debug("SIP<-OnMessage", zap.String("id", id), zap.String("source", req.Source()), zap.String("req", req.String()))
-
+	GB28181Plugin.Sugar().WithOptions(zap.AddCallerSkip(-1)).Debugf("SIP<-OnRegister,id: %s,source: %s, req: \n%s", id, req.Source(), req.String())
+	var (
+		expSec int64 = 3600
+		err    error
+	)
 	isUnregister := false // false: 表示已经注册过,true: 未注册或者注销
 	if exps := req.GetHeaders("Expires"); len(exps) > 0 {
 		exp := exps[0]
-		expSec, err := strconv.ParseInt(exp.Value(), 10, 32)
+		expSec, err = strconv.ParseInt(exp.Value(), 10, 32)
 		if err != nil {
 			GB28181Plugin.Info("OnRegister",
 				zap.String("error", fmt.Sprintf("wrong expire header value %q", exp)),
@@ -97,8 +99,9 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 				zap.String("destination", req.Destination()))
 			return
 		}
-		GB28181Plugin.Sugar().Debugf("expires: %d", expSec)
+		GB28181Plugin.Sugar().WithOptions(zap.AddCallerSkip(-1)).Debugf("expires: %d", expSec)
 		if expSec == 0 {
+			// 注销
 			isUnregister = true
 		}
 	} else {
@@ -140,7 +143,7 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 			}
 
 			if dc, ok := DeviceRegisterCount.LoadOrStore(id, 1); ok && dc.(int) > MaxRegisterCount {
-				GB28181Plugin.Sugar().Warnf("%s-禁止注册", id)
+				GB28181Plugin.Sugar().WithOptions(zap.AddCallerSkip(-1)).Warnf("%s-禁止注册", id)
 				response := sip.NewResponseFromRequest("", req, http.StatusForbidden, "Forbidden", "")
 				tx.Respond(response)
 				return
@@ -151,11 +154,11 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 					passAuth = true
 				} else {
 
-					GB28181Plugin.Sugar().Debugf("auth: %#v", *auth.Authorization)
+					//GB28181Plugin.Sugar().WithOptions(zap.AddCallerSkip(-1)).Debugf("auth: %#v", *auth.Authorization)
 					if loaded {
-						GB28181Plugin.Sugar().Warnf("%s-注册失败,response: %s", id, auth.VerifyStr(username, c.Password, c.Realm, _nonce.(string)))
+						GB28181Plugin.Sugar().WithOptions(zap.AddCallerSkip(-1)).Warnf("%s-注册失败,response: %s", id, auth.VerifyStr(username, c.Password, c.Realm, _nonce.(string)))
 					} else {
-						GB28181Plugin.Sugar().Warnf("%s-注册失败,无nonce", id)
+						GB28181Plugin.Sugar().WithOptions(zap.AddCallerSkip(-1)).Warnf("%s-注册失败,无nonce", id)
 					}
 					DeviceRegisterCount.Store(id, dc.(int)+1)
 				}
@@ -202,7 +205,7 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 		to, _ := resp.To()
 		resp.ReplaceHeaders("To", []sip.Header{&sip.ToHeader{Address: to.Address, Params: sip.NewParams().Add("tag", sip.String{Str: utils.RandNumString(9)})}})
 		resp.RemoveHeader("Allow")
-		expires := sip.Expires(3600)
+		expires := sip.Expires(expSec)
 		resp.AppendHeader(&expires)
 		resp.AppendHeader(&sip.GenericHeader{
 			HeaderName: "Date",
@@ -234,6 +237,7 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 			Contents:   "3.0",
 		})
 		sip.CopyHeaders("Expires", req, response)
+		GB28181Plugin.Sugar().WithOptions(zap.AddCallerSkip(-1)).Debugf("SIP->OnRegister id: %s, res: \n%s", id, response.String())
 		_ = tx.Respond(response)
 	}
 }
@@ -291,6 +295,7 @@ func (c *GB28181Config) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 			DeviceList   []ChannelInfo `xml:"DeviceList>Item"`
 			RecordList   []*Record     `xml:"RecordList>Item"`
 			SumNum       int           // 录像结果的总数 SumNum，录像结果会按照多条消息返回，可用于判断是否全部返回
+			Result       string        `xml:"Result"`
 		}{}
 		decoder := xml.NewDecoder(bytes.NewReader([]byte(req.Body())))
 		decoder.Strict = false //关闭强制char值的严格模式  处理invalid character entity &trackID (no semicolon)问题 原因:在属性值和字符数据中，不处理未知或格式错误的字符实体(以&开头的序列)
@@ -355,7 +360,70 @@ func (c *GB28181Config) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 			d.Status = DeviceAlarmedStatus
 			body = BuildAlarmResponseXML(d.ID)
 		case "Broadcast":
-			GB28181Plugin.Info("broadcast message", zap.String("body", req.Body()))
+			GB28181Plugin.Sugar().WithOptions(zap.AddCallerSkip(-1)).Infof("broadcast message, body: \n%s", req.Body())
+		case "DeviceConfig":
+			type Response struct {
+				XMLName  xml.Name `xml:"Response"`
+				Text     string   `xml:",chardata"`
+				CmdType  string   `xml:"CmdType"`
+				SN       string   `xml:"SN"`
+				DeviceID string   `xml:"DeviceID"`
+				Result   string   `xml:"Result"`
+			}
+			GB28181Plugin.Sugar().WithOptions(zap.AddCallerSkip(-1)).Infof("DeviceConfig message, body: \n%s", req.Body())
+			if temp.Result != "OK" {
+				return
+			}
+		case "UploadSnapShotFinished": // 抓拍图片上传完成
+			type UploadSnapShotFinishedNotify struct {
+				XMLName      xml.Name `xml:"Notify"`
+				Text         string   `xml:",chardata"`
+				CmdType      string   `xml:"CmdType"`
+				SN           string   `xml:"SN"`
+				DeviceID     string   `xml:"DeviceID"`
+				SessionID    string   `xml:"SessionID"`
+				SnapShotList struct {
+					Text           string   `xml:",chardata"`
+					SnapShotFileID []string `xml:"SnapShotFileID"`
+				} `xml:"SnapShotList"`
+			}
+
+			go func(reqINfo sip.Request, id string) {
+				tu := UploadSnapShotFinishedNotify{}
+				if err = utils.DecodeXML([]byte(reqINfo.Body()), &tu); err != nil {
+					GB28181Plugin.Error(err.Error())
+					return
+				}
+
+				loc, _ := time.LoadLocation("Asia/Shanghai")
+				//GB28181Plugin.Sugar().Debugf("%#v", tu.SnapShotList.SnapShotFileID)
+
+				for index, i := range tu.SnapShotList.SnapShotFileID {
+					timestamp := i[22:39]
+					ctime, err := time.ParseInLocation("20060102150405000", timestamp, loc)
+					if err != nil {
+						GB28181Plugin.Error(err.Error())
+					}
+					imgPath := "uploads/" + i
+					//if !strings.HasSuffix(i, ".jpg") {
+					//	imgPath = imgPath + ".jpg"
+					//}
+					err = GB28181Plugin.DB.Create(&model.Gb28181Capture{
+						DeviceID:   id,
+						ChannelID:  tu.DeviceID,
+						SessionID:  tu.SessionID,
+						ImgPath:    imgPath,
+						Index:      uint(index + 1),
+						UploadTime: ctime,
+						CreatedAt:  time.Now(),
+						UpdatedAt:  time.Now(),
+					}).Error
+					if err != nil {
+						GB28181Plugin.Error(err.Error())
+					}
+				}
+			}(req, id)
+
 		default:
 			d.Warn("Not supported CmdType", zap.String("CmdType", temp.CmdType), zap.String("body", req.Body()))
 			response := sip.NewResponseFromRequest("", req, http.StatusBadRequest, "", "")
@@ -367,7 +435,9 @@ func (c *GB28181Config) OnMessage(req sip.Request, tx sip.ServerTransaction) {
 			Type:   temp.CmdType,
 			Device: d,
 		})
-		tx.Respond(sip.NewResponseFromRequest("", req, http.StatusOK, "OK", body))
+		res := sip.NewResponseFromRequest("", req, http.StatusOK, "OK", body)
+		GB28181Plugin.Sugar().WithOptions(zap.AddCallerSkip(-1)).Debugf("SIP->OnMessage id: %s, res: \n%s", id, res.String())
+		tx.Respond(res)
 	} else {
 		GB28181Plugin.Debug("设备未注册 Unauthorized message, device not found", zap.String("id", id))
 	}

@@ -3,6 +3,7 @@ package gb28181
 import (
 	"fmt"
 	"io"
+	"m7s.live/plugin/gb28181/v4/model"
 	"net/http"
 	"net/url"
 	"os"
@@ -131,9 +132,10 @@ func (c *GB28181Config) API_invite(w http.ResponseWriter, r *http.Request) {
 		util.ReturnError(util.APIErrorNotFound, fmt.Sprintf("device %q channel %q not found", id, channel), w, r)
 	} else if opt.IsLive() && c.State.Load() > 0 {
 		util.ReturnError(util.APIErrorQueryParse, "live stream already exists", w, r)
-	} else if code, err := c.Invite(&opt); err == nil {
+	} else if code, streamPath, err := c.Invite(&opt); err == nil {
 		if code == 200 {
-			util.ReturnOK(w, r)
+
+			util.ReturnValue(util.GenAddr(streamPath), w, r)
 		} else {
 			util.ReturnError(util.APIErrorInternal, fmt.Sprintf("invite return code %d", code), w, r)
 		}
@@ -274,8 +276,6 @@ func (c *GB28181Config) API_get_position(w http.ResponseWriter, r *http.Request)
 	}, w, r)
 }
 
-// test
-
 func (c *GB28181Config) API_switch(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	d := query.Get("deny")
@@ -311,7 +311,7 @@ func (c *GB28181Config) API_file_upload(w http.ResponseWriter, req *http.Request
 	contentType := req.Header.Get("content-type")
 	contentLen := req.ContentLength
 
-	fmt.Printf("upload content-type:%s,content-length:%d", contentType, contentLen)
+	//fmt.Printf("upload content-type:%s,content-length:%d", contentType, contentLen)
 	if !strings.Contains(contentType, "multipart/form-data") {
 		w.Write([]byte("content-type must be multipart/form-data"))
 		return
@@ -334,7 +334,7 @@ func (c *GB28181Config) API_file_upload(w http.ResponseWriter, req *http.Request
 	}
 
 	for name, files := range req.MultipartForm.File {
-		fmt.Printf("req.MultipartForm.File,name=%s", name)
+		//fmt.Printf("req.MultipartForm.File,name=%s", name)
 
 		if len(files) != 1 {
 			w.Write([]byte("too many files"))
@@ -356,9 +356,69 @@ func (c *GB28181Config) API_file_upload(w http.ResponseWriter, req *http.Request
 			dst, _ := os.Create(path)
 			io.Copy(dst, handle)
 			dst.Close()
-			fmt.Printf("successful uploaded,fileName=%s,fileSize=%.2f MB,savePath=%s \n", f.Filename, float64(contentLen)/1024/1024, path)
+			//fmt.Printf("successful uploaded,fileName=%s,fileSize=%.2f MB,savePath=%s \n", f.Filename, float64(contentLen)/1024/1024, path)
 
 			w.Write([]byte("successful,url=" + url.QueryEscape(f.Filename)))
 		}
 	}
+}
+
+// API_Images 显示图片
+func (c *GB28181Config) API_Images(w http.ResponseWriter, r *http.Request) {
+	imgPath := r.URL.Query().Get("path")
+	if !strings.HasPrefix(imgPath, "uploads") {
+		util.ReturnError(util.APIErrorNotFound, "not found", w, r)
+		return
+	}
+	buff, err := os.ReadFile(imgPath)
+	if err != nil {
+		util.ReturnError(util.APIErrorInternal, err.Error(), w, r)
+		return
+	}
+	w.Write(buff)
+}
+
+// API_Capture_List 上传的图片列表
+func (c *GB28181Config) API_Capture_List(w http.ResponseWriter, r *http.Request) {
+
+	var (
+		page int = 1
+		size int = 10
+		err  error
+	)
+
+	q := r.URL.Query()
+
+	id := q.Get("id")
+	channel := q.Get("channel")
+	pageStr := q.Get("page")
+	sizeStr := q.Get("size")
+
+	if pageStr != "" {
+		page, err = strconv.Atoi(pageStr)
+		if err != nil {
+			GB28181Plugin.Error(err.Error())
+			page = 1
+		}
+		if page == 0 {
+			page = 1
+		}
+	}
+
+	if sizeStr != "" {
+		size, err = strconv.Atoi(sizeStr)
+		if err != nil {
+			GB28181Plugin.Error(err.Error())
+			size = 10
+		}
+		if size == 0 {
+			size = 10
+		}
+	}
+	list, total, err := model.CaptureList(GB28181Plugin.DB, id, channel, page, size)
+	if err != nil {
+		util.ReturnError(util.APIErrorInternal, err.Error(), w, r)
+		return
+	}
+	util.ReturnValue(map[string]interface{}{"list": list, "total": total, "page": page, "size": size}, w, r)
 }

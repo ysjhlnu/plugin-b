@@ -335,10 +335,10 @@ f字段中视、音频参数段之间不需空格分割。
 可使用f字段中的分辨率参数标识同一设备不同分辨率的码流。
 */
 
-func (channel *Channel) Invite(opt *InviteOptions) (code int, err error) {
+func (channel *Channel) Invite(opt *InviteOptions) (code int, streamPath string, err error) {
 	if opt.IsLive() {
 		if !channel.State.CompareAndSwap(0, 1) {
-			return 304, nil
+			return 304, "", nil
 		}
 		defer func() {
 			if err != nil {
@@ -356,7 +356,7 @@ func (channel *Channel) Invite(opt *InviteOptions) (code int, err error) {
 		}()
 	}
 	d := channel.Device
-	streamPath := fmt.Sprintf("%s/%s", d.ID, channel.DeviceID)
+	streamPath = fmt.Sprintf("%s/%s", d.ID, channel.DeviceID)
 	s := "Play"
 	opt.CreateSSRC()
 	if opt.Record() {
@@ -393,7 +393,7 @@ func (channel *Channel) Invite(opt *InviteOptions) (code int, err error) {
 		}
 	}
 	if err != nil {
-		return http.StatusInternalServerError, err
+		return http.StatusInternalServerError, "", err
 	}
 	if opt.MediaPort == 0 {
 		opt.MediaPort = conf.MediaPort
@@ -428,7 +428,7 @@ func (channel *Channel) Invite(opt *InviteOptions) (code int, err error) {
 	inviteRes, err := d.SipRequestForResponse(invite)
 	if err != nil {
 		channel.Error("invite", zap.Error(err), zap.String("msg", invite.String()))
-		return http.StatusInternalServerError, err
+		return http.StatusInternalServerError, "", err
 	}
 	code = int(inviteRes.StatusCode())
 	channel.Info("invite response", zap.Int("status code", code))
@@ -598,14 +598,16 @@ func (channel *Channel) ImageCaptureConfig() int {
 		Params:          sip.NewParams().Add("branch", sip.String{Str: sip.GenerateBranch()}).Add("rport", nil),
 	}
 	request.AppendHeader(sip.ViaHeader{&via})
-
-	body := BuildImageCaptureConfig(d.SN, 1, 1, channel.DeviceID, "http://192.168.1.166:8080/gb28181/api/file/upload", "123")
+	sessionID := fmt.Sprintf("%s%d", channel.DeviceID, time.Now().UnixNano())
+	url := "http://" + conf.MediaIP + EngineConfig.GetHTTPConfig().ListenAddr + "/gb28181/api/file/upload"
+	body := BuildImageCaptureConfig(d.SN, 1, 1, channel.DeviceID, url, sessionID)
 	request.SetBody(body, true)
 
-	GB28181Plugin.Sugar().Debugf("SIP->image capture config: \n%s", request)
+	GB28181Plugin.Sugar().WithOptions(zap.AddCallerSkip(-1)).Debugf("SIP->image capture config: \n%s", request)
 	resp, err := d.SipRequestForResponse(request)
 	if err != nil {
 		return http.StatusRequestTimeout
 	}
+	GB28181Plugin.Sugar().WithOptions(zap.AddCallerSkip(-1)).Debugf("SIP<-image capture config res: \n%s", resp)
 	return int(resp.StatusCode())
 }

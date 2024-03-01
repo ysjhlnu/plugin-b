@@ -4,12 +4,53 @@ import (
 	"time"
 )
 
+// Gb28181Capture gb28181 2022 抓图
+type Gb28181Capture struct {
+	ID         uint      `gorm:"autoIncrement:true;primaryKey;column:id;type:int unsigned;not null" json:"id"`
+	DeviceID   string    `gorm:"column:device_id;type:varchar(255);default:null;comment:'设备ID'" json:"device_id"`   // 设备ID
+	ChannelID  string    `gorm:"column:channel_id;type:varchar(255);default:null;comment:'通道ID'" json:"channel_id"` // 通道ID
+	SessionID  string    `gorm:"column:session_id;type:varchar(255);default:null;comment:'会话ID'" json:"session_id"` // 会话ID
+	ImgPath    string    `gorm:"column:img_path;type:varchar(255);default:null;comment:'图片路径'" json:"img_path"`     // 图片路径
+	Index      uint      `gorm:"column:index;type:int unsigned;default:null;default:0;comment:'张数序号'" json:"index"` // 张数序号
+	UploadTime time.Time `gorm:"column:upload_time;type:datetime;default:null;comment:'采集时间'" json:"upload_time"`   // 采集时间
+	CreatedAt  time.Time `gorm:"column:created_at;type:datetime;default:null" json:"created_at"`
+	UpdatedAt  time.Time `gorm:"column:updated_at;type:datetime;default:null" json:"updated_at"`
+}
+
+// TableName get sql table name.获取数据库表名
+func (m *Gb28181Capture) TableName() string {
+	return "gb28181_capture"
+}
+
+// Gb28181CaptureColumns get sql column name.获取数据库列名
+var Gb28181CaptureColumns = struct {
+	ID         string
+	DeviceID   string
+	ChannelID  string
+	SessionID  string
+	ImgPath    string
+	Index      string
+	UploadTime string
+	CreatedAt  string
+	UpdatedAt  string
+}{
+	ID:         "id",
+	DeviceID:   "device_id",
+	ChannelID:  "channel_id",
+	SessionID:  "session_id",
+	ImgPath:    "img_path",
+	Index:      "index",
+	UploadTime: "upload_time",
+	CreatedAt:  "created_at",
+	UpdatedAt:  "updated_at",
+}
+
 // Gb28181Device [...]
 type Gb28181Device struct {
 	ID                               uint64    `gorm:"autoIncrement:true;primaryKey;unique;column:id;type:bigint unsigned;not null" json:"id"`
-	Version                          string    `gorm:"column:version;type:varchar(255);default:null;comment:'国标版本'" json:"version"` // 国标版本
+	Version                          string    `gorm:"uniqueIndex:uk_device_device;column:version;type:varchar(255);default:null;comment:'国标版本'" json:"version"` // 国标版本
 	CustomName                       string    `gorm:"column:custom_name;type:varchar(255);default:null" json:"custom_name"`
-	DeviceID                         string    `gorm:"unique;column:device_id;type:varchar(50);not null;comment:'国标ID'" json:"device_id"` // 国标ID
+	DeviceID                         string    `gorm:"uniqueIndex:uk_device_device;column:device_id;type:varchar(50);not null;comment:'国标ID'" json:"device_id"` // 国标ID
 	Name                             string    `gorm:"column:name;type:varchar(255);default:null" json:"name"`
 	Manufacturer                     string    `gorm:"column:manufacturer;type:varchar(255);default:null" json:"manufacturer"`
 	Model                            string    `gorm:"column:model;type:varchar(255);default:null" json:"model"`
@@ -126,9 +167,9 @@ var Gb28181DeviceColumns = struct {
 // Gb28181DeviceChannel [...]
 type Gb28181DeviceChannel struct {
 	ID          uint64 `gorm:"autoIncrement:true;primaryKey;unique;column:id;type:bigint unsigned;not null" json:"id"`
-	Version     string `gorm:"column:version;type:varchar(255);default:null;comment:'国标版本'" json:"version"` // 国标版本
-	DeviceID    string `gorm:"uniqueIndex:uk_wvp_device_channel_unique_device_channel;column:device_id;type:varchar(50);not null" json:"device_id"`
-	ChannelID   string `gorm:"uniqueIndex:uk_wvp_device_channel_unique_device_channel;column:channel_id;type:varchar(50);not null" json:"channel_id"`
+	Version     string `gorm:"uniqueIndex:device_channel_unique_device_channel;column:version;type:varchar(255);default:null;comment:'国标版本'" json:"version"` // 国标版本
+	DeviceID    string `gorm:"uniqueIndex:device_channel_unique_device_channel;column:device_id;type:varchar(50);not null" json:"device_id"`
+	ChannelID   string `gorm:"uniqueIndex:device_channel_unique_device_channel;column:channel_id;type:varchar(50);not null" json:"channel_id"`
 	Name        string `gorm:"column:name;type:varchar(255);default:null" json:"name"`
 	CustomName  string `gorm:"column:custom_name;type:varchar(255);default:null" json:"custom_name"`
 	Manufacture string `gorm:"column:manufacture;type:varchar(50);default:null" json:"manufacture"`
@@ -264,4 +305,60 @@ var Gb28181DeviceChannelColumns = struct {
 	GpsTime:         "gps_time",
 	CreateTime:      "create_time",
 	UpdateTime:      "update_time",
+}
+
+// User 用户
+type User struct {
+	ID         int       `gorm:"autoIncrement:true;primaryKey;column:id;type:int;not null" json:"id"`
+	Name       string    `gorm:"unique;column:name;type:varchar(128);not null;comment:'账号'" json:"name"`                                    // 账号
+	SystemName string    `gorm:"column:system_name;type:varchar(128);not null;default:智慧电网管理平台;comment:'系统名称'" json:"system_name"`          // 系统名称
+	NickName   string    `gorm:"column:nick_name;type:varchar(128);not null;comment:'姓名'" json:"nick_name"`                                 // 姓名
+	Phone      string    `gorm:"column:phone;type:varchar(30);default:null;comment:'电话号码'" json:"phone"`                                    // 电话号码
+	Email      string    `gorm:"column:email;type:varchar(50);default:null;comment:'邮箱'" json:"email"`                                      // 邮箱
+	Pwd        string    `gorm:"column:pwd;type:char(60);default:null;comment:'密码'" json:"pwd"`                                             // 密码
+	Token      string    `gorm:"column:token;type:char(32);not null;default:'';comment:'认证码'" json:"token"`                                 // 认证码
+	Openid     string    `gorm:"column:openid;type:char(32);default:null;comment:'统一认证平台id'" json:"openid"`                                 // 统一认证平台id
+	Oname      string    `gorm:"column:oname;type:varchar(45);default:null;comment:'统一认证平台昵称'" json:"oname"`                                // 统一认证平台昵称
+	Status     uint8     `gorm:"column:status;type:tinyint unsigned;not null;default:0;comment:'状态 0禁用 1启用'" json:"status"`                 // 状态 0禁用 1启用
+	LoginTime  time.Time `gorm:"column:login_time;type:datetime;default:null;default:0000-01-01 00:00:00;comment:'登陆时间'" json:"login_time"` // 登陆时间
+	CreatedAt  time.Time `gorm:"column:created_at;type:datetime;default:null;default:0000-01-01 00:00:00;comment:'创建时间'" json:"created_at"` // 创建时间
+	UpdatedAt  time.Time `gorm:"column:updated_at;type:datetime;default:null;comment:'更新时间'" json:"updated_at"`                             // 更新时间
+}
+
+// TableName get sql table name.获取数据库表名
+func (m *User) TableName() string {
+	return "user"
+}
+
+// UserColumns get sql column name.获取数据库列名
+var UserColumns = struct {
+	ID         string
+	Name       string
+	SystemName string
+	NickName   string
+	Phone      string
+	Email      string
+	Pwd        string
+	Token      string
+	Openid     string
+	Oname      string
+	Status     string
+	LoginTime  string
+	CreatedAt  string
+	UpdatedAt  string
+}{
+	ID:         "id",
+	Name:       "name",
+	SystemName: "system_name",
+	NickName:   "nick_name",
+	Phone:      "phone",
+	Email:      "email",
+	Pwd:        "pwd",
+	Token:      "token",
+	Openid:     "openid",
+	Oname:      "oname",
+	Status:     "status",
+	LoginTime:  "login_time",
+	CreatedAt:  "created_at",
+	UpdatedAt:  "updated_at",
 }
