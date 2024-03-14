@@ -7,6 +7,13 @@ import (
 
 func CreateDeviceChannel(db *gorm.DB, version, deviceID, channelID, name, manufacturer, model, owner, civilCode, address, parentID, status string,
 	safetyWay, registerWay, secrecy, parental int) (err error) {
+
+	dev := Gb28181DeviceChannel{}
+	err = db.Model(&Gb28181DeviceChannel{}).Where("version=? AND channel_id=? AND device_id=?", version, channelID, deviceID).First(&dev).Error
+	if err == nil {
+		return err
+	}
+
 	err = db.Create(&Gb28181DeviceChannel{
 		Version:     version,
 		ChannelID:   channelID,

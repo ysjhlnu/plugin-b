@@ -307,6 +307,41 @@ var Gb28181DeviceChannelColumns = struct {
 	UpdateTime:      "update_time",
 }
 
+// Gb28181Present [...]
+type Gb28181Present struct {
+	ID           uint      `gorm:"autoIncrement:true;primaryKey;column:id;type:int unsigned;not null" json:"id"`
+	DeviceID     string    `gorm:"index:idx_id_channel_index;column:device_id;type:varchar(64);default:null;comment:'设备编码'" json:"device_id"`                        // 设备编码
+	ChannelID    string    `gorm:"index:idx_id_channel_index;column:channel_id;type:varchar(64);default:null;comment:'通道编码'" json:"channel_id"`                      // 通道编码
+	PresentIndex uint8     `gorm:"index:idx_id_channel_index;column:present_index;type:tinyint unsigned;default:null;default:0;comment:'预置点位'" json:"present_index"` // 预置点位
+	Memo         string    `gorm:"column:memo;type:varchar(255);default:null;comment:'备注'" json:"memo"`                                                              // 备注
+	CreatedAt    time.Time `gorm:"column:created_at;type:datetime;default:null" json:"created_at"`
+	UpdatedAt    time.Time `gorm:"column:updated_at;type:datetime;default:null" json:"updated_at"`
+}
+
+// TableName get sql table name.获取数据库表名
+func (m *Gb28181Present) TableName() string {
+	return "gb28181_present"
+}
+
+// Gb28181PresentColumns get sql column name.获取数据库列名
+var Gb28181PresentColumns = struct {
+	ID           string
+	DeviceID     string
+	ChannelID    string
+	PresentIndex string
+	Memo         string
+	CreatedAt    string
+	UpdatedAt    string
+}{
+	ID:           "id",
+	DeviceID:     "device_id",
+	ChannelID:    "channel_id",
+	PresentIndex: "present_index",
+	Memo:         "memo",
+	CreatedAt:    "created_at",
+	UpdatedAt:    "updated_at",
+}
+
 // User 用户
 type User struct {
 	ID         int       `gorm:"autoIncrement:true;primaryKey;column:id;type:int;not null" json:"id"`
@@ -319,7 +354,7 @@ type User struct {
 	Token      string    `gorm:"column:token;type:char(32);not null;default:'';comment:'认证码'" json:"token"`                                 // 认证码
 	Openid     string    `gorm:"column:openid;type:char(32);default:null;comment:'统一认证平台id'" json:"openid"`                                 // 统一认证平台id
 	Oname      string    `gorm:"column:oname;type:varchar(45);default:null;comment:'统一认证平台昵称'" json:"oname"`                                // 统一认证平台昵称
-	Status     uint8     `gorm:"column:status;type:tinyint unsigned;not null;default:0;comment:'状态 0禁用 1启用'" json:"status"`                 // 状态 0禁用 1启用
+	Status     uint8     `gorm:"column:status;type:tinyint unsigned;default:null;default:0;comment:'状态 0禁用 1启用'" json:"status"`             // 状态 0禁用 1启用
 	LoginTime  time.Time `gorm:"column:login_time;type:datetime;default:null;default:0000-01-01 00:00:00;comment:'登陆时间'" json:"login_time"` // 登陆时间
 	CreatedAt  time.Time `gorm:"column:created_at;type:datetime;default:null;default:0000-01-01 00:00:00;comment:'创建时间'" json:"created_at"` // 创建时间
 	UpdatedAt  time.Time `gorm:"column:updated_at;type:datetime;default:null;comment:'更新时间'" json:"updated_at"`                             // 更新时间

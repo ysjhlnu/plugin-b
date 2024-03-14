@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"m7s.live/plugin/gb28181/v4/model"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -117,6 +119,18 @@ func RequestForResponse(transport string, request sip.Request,
 }
 
 func (c *GB28181Config) startServer() {
+
+	// 检查文件上传的目录是否存在
+	uploadPath, err := filepath.Abs(filepath.Base("./uploads/"))
+	if err != nil {
+		GB28181Plugin.Sugar().Errorf("获取文件上传目录失败,err: %v", err)
+	} else {
+		GB28181Plugin.Sugar().Debugf("文件上传目录: %s", uploadPath)
+		if err = os.MkdirAll(uploadPath, os.ModePerm); err != nil {
+			GB28181Plugin.Sugar().Errorf("创建文件上传目录失败,err: %v", err)
+		}
+	}
+
 	addr := c.ListenAddr + ":" + strconv.Itoa(int(c.SipPort))
 
 	logger := utils.NewZapLogger(GB28181Plugin.Logger, "GB SIP Server", nil)
@@ -131,7 +145,7 @@ func (c *GB28181Config) startServer() {
 	srv.OnRequest(sip.MESSAGE, c.OnMessage)
 	srv.OnRequest(sip.NOTIFY, c.OnNotify)
 	srv.OnRequest(sip.BYE, c.OnBye)
-	err := srv.Listen(strings.ToLower(c.SipNetwork), addr)
+	err = srv.Listen(strings.ToLower(c.SipNetwork), addr)
 	if err != nil {
 		GB28181Plugin.Logger.Error("gb28181 server listen", zap.Error(err))
 	} else {

@@ -40,9 +40,10 @@ func (r *Record) GetPublishStreamPath() string {
 }
 
 var (
-	Devices             sync.Map
-	DeviceNonce         sync.Map //保存nonce防止设备伪造
-	DeviceRegisterCount sync.Map //设备注册次数
+	Devices              sync.Map
+	DeviceNonce          sync.Map //保存nonce防止设备伪造
+	DeviceRegisterCount  sync.Map //设备注册次数
+	DeviceChannelSession sync.Map // 设备抓图session
 )
 
 type DeviceStatus string // 下面5个状态值
@@ -560,7 +561,7 @@ func (d *Device) Subscribe() int {
 
 // Catalog 目录查询将下级推送的资源查询出来
 func (d *Device) Catalog() int {
-	//os.Stdout.Write(debug.Stack())
+
 	request := d.CreateRequest(sip.MESSAGE)
 	expires := sip.Expires(3600)
 	d.subscriber.Timeout = time.Now().Add(time.Second * time.Duration(expires))

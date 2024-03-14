@@ -1,11 +1,19 @@
 package model
 
 import (
+	"go.uber.org/zap"
 	"gorm.io/gorm"
+	"m7s.live/plugin/b/model"
 	"time"
 )
 
 func CreateDevice(db *gorm.DB, version, id, deviceIp, sipIP, mediaIp, DeviceRegisterStatus string) (err error) {
+
+	dev := Gb28181Device{}
+	err = db.Model(&Gb28181Device{}).Where("version=? AND device_id=?").First(&dev).Error
+	if err == nil {
+		return err
+	}
 	err = db.Create(&Gb28181Device{
 		Version:                          version,
 		DeviceID:                         id,
@@ -65,4 +73,32 @@ func DeviceList(db *gorm.DB, version string) (device []Gb28181Device, err error)
 	device = make([]Gb28181Device, 0)
 	err = db.Model(&Gb28181Device{}).Where("version=?", version).Find(&device).Error
 	return device, err
+}
+
+func DevicesChannelList(db *gorm.DB, logger *zap.SugaredLogger, id, version, status string, page, size int) (device []GB28181DeviceChannel, total int64, err error) {
+	device = make([]GB28181DeviceChannel, 0)
+	query := db.Model(&Gb28181Device{})
+	if id != "" {
+		query.Where("device_id=?", id)
+	}
+	if version != "" {
+		query.Where("version=?", version)
+	}
+	if status != "" {
+		query.Where("status=?", status)
+	}
+	err = query.Count(&total).Limit(size).Offset((page - 1) * size).Find(&device).Error
+	if err != nil {
+		logger.Errorf("DB GB28181,err: %v", err)
+		return
+	}
+	for i, d := range device {
+		channelList := make([]GB28181DeviceChannelDetail, 0)
+		err = db.Model(&model.Gb28181DeviceChannel{}).Where("device_id=?", d.DeviceID).Find(&channelList).Error
+		if err != nil {
+			logger.Errorf("DB GB28181,err: %v", err)
+		}
+		device[i].ChannelList = channelList
+	}
+	return
 }

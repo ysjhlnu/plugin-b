@@ -8,7 +8,8 @@ import (
 
 var (
 	// CatalogXML 获取设备列表xml样式
-	CatalogXML = `<?xml version="1.0"?><Query>
+	CatalogXML = `<?xml version="1.0" encoding="UTF-8"?>
+<Query>
 <CmdType>Catalog</CmdType>
 <SN>%d</SN>
 <DeviceID>%s</DeviceID>

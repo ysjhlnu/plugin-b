@@ -599,7 +599,12 @@ func (channel *Channel) ImageCaptureConfig() int {
 	}
 	request.AppendHeader(sip.ViaHeader{&via})
 	sessionID := fmt.Sprintf("%s%d", channel.DeviceID, time.Now().UnixNano())
-	url := "http://" + conf.MediaIP + EngineConfig.GetHTTPConfig().ListenAddr + "/gb28181/api/file/upload"
+	DeviceChannelSession.Store(d.ID+"_"+channel.DeviceID+"_"+sessionID, sessionID)
+	url := "http://" + EngineConfig.ExternalIp + EngineConfig.GetHTTPConfig().ListenAddr + "/gb28181/api/file/upload"
+	if EngineConfig.Username != "" {
+		url = url + "?token=" + sessionID
+	}
+
 	body := BuildImageCaptureConfig(d.SN, 1, 1, channel.DeviceID, url, sessionID)
 	request.SetBody(body, true)
 

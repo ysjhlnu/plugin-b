@@ -130,7 +130,7 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 	} else {
 		// 需要密码情况 设备第一次上报，返回401和加密算法
 		if hdrs := req.GetHeaders("Authorization"); len(hdrs) > 0 {
-			GB28181Plugin.Debug("校验")
+			//GB28181Plugin.Debug("校验")
 			authenticateHeader := hdrs[0].(*sip.GenericHeader)
 			auth := &Authorization{sip.AuthFromValue(authenticateHeader.Contents)}
 
@@ -190,9 +190,7 @@ func (c *GB28181Config) OnRegister(req sip.Request, tx sip.ServerTransaction) {
 			if v, ok := Devices.Load(id); ok {
 				d = v.(*Device)
 				c.RecoverDevice(d, req)
-
 			} else {
-
 				// 未添加到本地的json文件中
 				d = c.StoreDevice(id, req)
 			}

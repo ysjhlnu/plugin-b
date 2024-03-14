@@ -7,17 +7,17 @@ require (
 	github.com/goccy/go-json v0.10.2
 	github.com/husanpao/ip v0.0.0-20220711082147-73160bb611a8
 	github.com/logrusorgru/aurora/v4 v4.0.0
-	github.com/pion/rtp v1.8.1
+	github.com/pion/rtp v1.8.3
 	go.uber.org/zap v1.26.0
-	golang.org/x/net v0.15.0
-	golang.org/x/text v0.13.0
+	golang.org/x/net v0.19.0
+	golang.org/x/text v0.14.0
 	gorm.io/gorm v1.25.5
 	m7s.live/engine/v4 v4.13.12
 	m7s.live/plugin/ps/v4 v4.1.2
 )
 
 require (
-	github.com/bluenviron/mediacommon v1.3.0 // indirect
+	github.com/bluenviron/mediacommon v1.5.1 // indirect
 	github.com/cnotch/ipchub v1.1.0 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
 	github.com/discoviking/fsm v0.0.0-20150126104936-f4a273feecca // indirect
@@ -38,6 +38,7 @@ require (
 	github.com/mattn/go-isatty v0.0.19 // indirect
 	github.com/mcuadros/go-defaults v1.2.0 // indirect
 	github.com/mgutz/ansi v0.0.0-20200706080929-d51e80ef957d // indirect
+	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
 	github.com/onsi/ginkgo/v2 v2.12.1 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
 	github.com/pion/webrtc/v3 v3.2.20 // indirect
@@ -56,12 +57,12 @@ require (
 	github.com/yapingcat/gomedia v0.0.0-20230905155010-55b9713fcec1 // indirect
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/crypto v0.13.0 // indirect
+	golang.org/x/crypto v0.16.0 // indirect
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
 	golang.org/x/mod v0.12.0 // indirect
 	golang.org/x/sync v0.3.0 // indirect
-	golang.org/x/sys v0.12.0 // indirect
-	golang.org/x/term v0.12.0 // indirect
+	golang.org/x/sys v0.15.0 // indirect
+	golang.org/x/term v0.15.0 // indirect
 	golang.org/x/tools v0.13.0 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
